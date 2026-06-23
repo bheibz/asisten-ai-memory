@@ -134,7 +134,7 @@ details small{display:block;margin-top:4px;color:var(--text3);line-height:1.4}
   <div class="typing" id="typing" x-show="streaming"><span></span><span></span><span></span></div>
   <div class="input-area">
     <input type="text" id="messageInput" placeholder="Ketik pesan..." autofocus
-      @keydown.enter="sendMessage()" :disabled="streaming">
+      x-model="inputText" @keydown.enter="sendMessage()" :disabled="streaming">
     <button class="btn accent" @click="sendMessage()" :disabled="streaming || !inputText" id="sendBtn">Kirim</button>
   </div>
 </div>
@@ -183,6 +183,34 @@ document.addEventListener('alpine:init', () => {
       this.loadProfile();
       this.checkReminders();
       this._convInterval = setInterval(() => this.loadConvs(), 30000);
+      // Event delegation for conversation list
+      document.getElementById('convList').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const cid = btn.dataset.cid;
+        if (btn.dataset.action === 'select') this.selectConv(cid);
+        if (btn.dataset.action === 'delete') { e.stopPropagation(); this.deleteConv(cid); }
+      });
+      // Event delegation for chat area (vote + edit)
+      document.getElementById('chatArea').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-vote]');
+        if (btn) {
+          const [msgId, vote] = btn.dataset.vote.split(':');
+          this.voteMsg(msgId, vote, btn);
+          return;
+        }
+        const editBtn = e.target.closest('[data-edit]');
+        if (editBtn) {
+          const [msgId, ...rest] = editBtn.dataset.edit.split(':');
+          this.editMsg(msgId, rest.join(':'));
+          return;
+        }
+        const editDiv = e.target.closest('[data-edit-msg]');
+        if (editDiv) {
+          const [msgId, ...rest] = editDiv.dataset.editMsg.split(':');
+          this.editMsg(msgId, rest.join(':'));
+        }
+      });
     },
 
     // ── Theme ──
@@ -212,11 +240,10 @@ document.addEventListener('alpine:init', () => {
         convs.forEach(c => {
           if (this.search && !(c.title || '').toLowerCase().includes(this.search.toLowerCase())) return;
           const title = c.title || 'Percakapan';
-          html += `<div class="conv-item${c.id === this.convId ? ' active' : ''}"
-            onclick="document.querySelector('[x-data]').__x.$data.selectConv('${c.id}')">
+          html += `<div class="conv-item${c.id === this.convId ? ' active' : ''}" data-cid="${c.id}" data-action="select">
             <div class="conv-title">${this.esc(title)}</div>
             <div class="conv-meta">${c.category||'casual'} · ${c.message_count||0} psn</div>
-            <button class="conv-del" onclick="event.stopPropagation();document.querySelector('[x-data]').__x.$data.deleteConv('${c.id}')">&times;</button>
+            <button class="conv-del" data-action="delete" data-cid="${c.id}">&times;</button>
           </div>`;
         });
         if (!html) html = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Belum ada percakapan</div>';
@@ -273,10 +300,10 @@ document.addEventListener('alpine:init', () => {
 
       let actions = '';
       if (role === 'assistant' && msgId) {
-        actions = `<button class="up" onclick="document.querySelector('[x-data]').__x.$data.voteMsg('${msgId}','up',this)">👍</button>
-                   <button class="down" onclick="document.querySelector('[x-data]').__x.$data.voteMsg('${msgId}','down',this)">👎</button>`;
+        actions = `<button class="up" data-vote="${msgId}:up">👍</button>
+                   <button class="down" data-vote="${msgId}:down">👎</button>`;
       } else if (role === 'user' && msgId) {
-        actions = `<button onclick="document.querySelector('[x-data]').__x.$data.editMsg('${msgId}','${this.esc(content)}')">✏️</button>`;
+        actions = `<button data-edit="${msgId}:${this.esc(content)}">✏️</button>`;
       }
 
       const label = role === 'user' ? 'Kamu' : 'AI';
@@ -285,7 +312,7 @@ document.addEventListener('alpine:init', () => {
         <div style="font-size:10px;color:var(--text2);margin-bottom:3px">${label}</div>
         ${this.fmtContent(content)}${timeHtml}`;
 
-      if (role === 'user' && msgId) div.onclick = () => this.editMsg(msgId, content);
+      if (role === 'user' && msgId) { div.dataset.editMsg = `${msgId}:${content}`; div.setAttribute('data-edit-msg', ''); }
       area.appendChild(div);
       this.scroll();
       return div;
