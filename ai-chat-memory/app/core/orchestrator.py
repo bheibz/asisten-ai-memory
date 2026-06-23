@@ -202,6 +202,8 @@ class BrainOrchestrator:
 
         clean_response = re.sub(r'__STATUS__:[^\n]*\n?|__CMD__:[^\n]*', '', full_response).strip()
 
+
+
         if cmd_result:
             clean_response += f"\n\n{cmd_result}"
 
