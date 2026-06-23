@@ -1,0 +1,1134 @@
+# 🧠 BLUEPRINT: AI Chat App dengan Long-Term Memory
+### *Fast, Token-Efficient & Resource-Optimized*
+
+---
+
+## 📐 1. ARSITEKTUR OVERVIEW
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        CLIENT LAYER                                 │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
+│   │   Web     │  │  Mobile  │  │   API    │  │  CLI / Terminal  │  │
+│   └────┬─────┘  └────┬─────┘  └────┬─────┘  └────────┬─────────┘  │
+│        └──────────────┴─────────────┴─────────────────┘             │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────────────┐
+│                      API GATEWAY / ROUTER                           │
+│            (Rate Limiting, Auth, Load Balancing)                    │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────────────┐
+│                    🧠 BRAIN ORCHESTRATOR                            │
+│  ┌─────────────┐ ┌──────────────┐ ┌─────────────┐ ┌────────────┐  │
+│  │  Query      │ │  Memory      │ │  Prompt      │ │  Response  │  │
+│  │  Classifier │ │  Manager     │ │  Compiler    │ │  Streamer  │  │
+│  └─────────────┘ └──────────────┘ └─────────────┘ └────────────┘  │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+        ┌──────────────────────┼──────────────────────┐
+        ▼                      ▼                      ▼
+┌───────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│  LLM GATEWAY  │  │  MEMORY STORAGE   │  │  TOOLS / PLUGINS  │
+│  ┌──────────┐ │  │  ┌─────────────┐  │  │  ┌─────────────┐  │
+│  │ OpenAI   │ │  │  │ Vector DB   │  │  │  │ Web Search  │  │
+│  │ Claude   │ │  │  │ (Qdrant)    │  │  │  │ Calculator  │  │
+│  │ Local LLM│ │  │  ├─────────────┤  │  │  │ Code Runner │  │
+│  │ Fallback │ │  │  │ PostgreSQL  │  │  │  │ File Parser │  │
+│  └──────────┘ │  │  ├─────────────┤  │  │  │ Custom API  │  │
+│               │  │  │ Redis Cache │  │  │  └─────────────┘  │
+└───────────────┘  │  └─────────────┘  │  └───────────────────┘
+                   └───────────────────┘
+```
+
+---
+
+## 🧠 2. SISTEM MEMORY (3-TIER ARCHITECTURE)
+
+Ini **inti** dari blueprint — memory dibagi 3 layer supaya hemat token:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    MEMORY ARCHITECTURE                       │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  TIER 1: WORKING MEMORY (Redis)            ⚡ Fast  │    │
+│  │  ─────────────────────────────────────────────────  │    │
+│  │  • Last 3-5 messages (raw)                         │    │
+│  │  • Current session context                         │    │
+│  │  • TTL: 30 menit                                   │    │
+│  │  • Selalu dikirim ke LLM                           │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                          │                                   │
+│                    (summarize & compress)                     │
+│                          ▼                                   │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  TIER 2: SHORT-TERM MEMORY (PostgreSQL)    🔄 Mid   │    │
+│  │  ─────────────────────────────────────────────────  │    │
+│  │  • Compressed conversation summaries               │    │
+│  │  • Per-session summaries                           │    │
+│  │  • User preferences detected                      │    │
+│  │  • TTL: 7-30 hari                                  │    │
+│  │  • Dikirim ke LLM hanya jika RELEVAN              │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                          │                                   │
+│                 (extract facts & embed)                       │
+│                          ▼                                   │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  TIER 3: LONG-TERM MEMORY (Vector DB)      💾 Deep  │    │
+│  │  ─────────────────────────────────────────────────  │    │
+│  │  • Extracted facts & knowledge                     │    │
+│  │  • User profile (auto-built)                       │    │
+│  │  • Semantic search via embeddings                  │    │
+│  │  • TTL: Permanent / decay score                    │    │
+│  │  • Dikirim ke LLM hanya TOP-K relevant             │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📊 3. DATABASE SCHEMA
+
+### 3.1 PostgreSQL — Relational Data
+
+```sql
+-- ============================================
+-- USERS TABLE
+-- ============================================
+CREATE TABLE users (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username        VARCHAR(100) UNIQUE NOT NULL,
+    email           VARCHAR(255) UNIQUE,
+    settings        JSONB DEFAULT '{}',
+    -- Auto-built profile dari percakapan
+    ai_profile      JSONB DEFAULT '{
+        "name": null,
+        "language_pref": "id",
+        "expertise_level": "general",
+        "interests": [],
+        "communication_style": "casual",
+        "known_facts": {}
+    }',
+    total_tokens_used   BIGINT DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- ============================================
+-- CONVERSATIONS TABLE
+-- ============================================
+CREATE TABLE conversations (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
+    title           VARCHAR(500),
+    category        VARCHAR(50), -- 'coding', 'writing', 'research', 'casual', etc.
+    summary         TEXT, -- Compressed summary of entire conversation
+    message_count   INT DEFAULT 0,
+    total_tokens    INT DEFAULT 0,
+    model_used      VARCHAR(50),
+    is_archived     BOOLEAN DEFAULT FALSE,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- ============================================
+-- MESSAGES TABLE
+-- ============================================
+CREATE TABLE messages (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
+    role            VARCHAR(20) NOT NULL, -- 'user', 'assistant', 'system'
+    content         TEXT NOT NULL,
+    -- Token tracking per message
+    tokens_input    INT DEFAULT 0,
+    tokens_output   INT DEFAULT 0,
+    -- Metadata
+    model_used      VARCHAR(50),
+    response_time_ms INT,
+    compressed      BOOLEAN DEFAULT FALSE, -- sudah di-compress?
+    metadata        JSONB DEFAULT '{}',
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- Index untuk fast retrieval
+CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at DESC);
+CREATE INDEX idx_conversations_user ON conversations(user_id, updated_at DESC);
+
+-- ============================================
+-- MEMORY FACTS TABLE (Extracted Knowledge)
+-- ============================================
+CREATE TABLE memory_facts (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID REFERENCES users(id) ON DELETE CASCADE,
+    fact_type       VARCHAR(50) NOT NULL,
+    -- Types: 'personal', 'preference', 'knowledge', 'instruction', 'context'
+    fact_key        VARCHAR(200),  -- e.g., "programming_language", "name", "job"
+    fact_value      TEXT NOT NULL,  -- e.g., "Python", "Budi", "Data Scientist"
+    source_conversation UUID REFERENCES conversations(id),
+    confidence      FLOAT DEFAULT 1.0,   -- 0.0 - 1.0
+    access_count    INT DEFAULT 0,       -- berapa kali di-retrieve
+    decay_score     FLOAT DEFAULT 1.0,   -- makin jarang dipakai, makin turun
+    last_accessed   TIMESTAMP DEFAULT NOW(),
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_facts_user ON memory_facts(user_id, fact_type);
+CREATE INDEX idx_facts_decay ON memory_facts(decay_score DESC);
+
+-- ============================================
+-- SESSION SUMMARIES (Compressed Memory)
+-- ============================================
+CREATE TABLE session_summaries (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID REFERENCES users(id),
+    conversation_id UUID REFERENCES conversations(id),
+    summary         TEXT NOT NULL,        -- Compressed summary
+    key_topics      TEXT[] DEFAULT '{}',  -- Array of topics discussed
+    token_count     INT,                  -- Token dari summary ini
+    original_tokens INT,                  -- Token asli sebelum compress
+    compression_ratio FLOAT,             -- Rasio kompresi
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+```
+
+### 3.2 Vector DB Schema (Qdrant/Pinecone)
+
+```python
+# Collection: "user_memories"
+MEMORY_VECTOR_SCHEMA = {
+    "collection_name": "user_memories",
+    "vector_size": 1536,  # OpenAI ada-002 / 384 for local models
+    "distance": "Cosine",
+    "payload_schema": {
+        "user_id": "keyword",
+        "fact_type": "keyword",      # personal, preference, knowledge
+        "content": "text",           # the actual memory text
+        "source_conversation_id": "keyword",
+        "created_at": "datetime",
+        "decay_score": "float",
+        "access_count": "integer",
+    }
+}
+```
+
+### 3.3 Redis Schema (Working Memory)
+
+```python
+# Key patterns untuk Redis
+REDIS_KEYS = {
+    # Current conversation buffer (last N messages)
+    "session:{user_id}:{conv_id}:messages": "LIST of JSON messages",
+
+    # User's active context
+    "session:{user_id}:context": "JSON {current_topic, mood, last_active}",
+
+    # Rate limiting
+    "ratelimit:{user_id}": "counter with TTL",
+
+    # Response cache (untuk pertanyaan identik)
+    "cache:{hash(prompt)}": "cached response with TTL 1h",
+}
+```
+
+---
+
+## ⚡ 4. TOKEN OPTIMIZATION ENGINE
+
+Ini **strategi utama** untuk hemat token & resource:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│              TOKEN OPTIMIZATION PIPELINE                      │
+│                                                              │
+│  User Message                                                │
+│       │                                                      │
+│       ▼                                                      │
+│  ┌──────────────────┐                                        │
+│  │ 1. QUERY          │  Klasifikasi: simple/complex/creative │
+│  │    CLASSIFIER     │  Route ke model yang tepat            │
+│  └────────┬─────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                        │
+│  │ 2. CACHE CHECK    │  Hit? → Return cached response       │
+│  │    (Redis)        │  Miss? → Continue pipeline            │
+│  └────────┬─────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐  Hanya ambil TOP-3 relevant memories  │
+│  │ 3. SMART MEMORY   │  Bukan seluruh history!              │
+│  │    RETRIEVAL      │  Semantic search + recency score     │
+│  └────────┬─────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐  System prompt di-compress             │
+│  │ 4. PROMPT         │  Memory di-inject minimal            │
+│  │    COMPILER       │  Template engine                     │
+│  └────────┬─────────┘                                        │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐  Pilih model berdasarkan complexity:  │
+│  │ 5. MODEL          │  Simple → GPT-3.5/Haiku (murah)     │
+│  │    ROUTER         │  Complex → GPT-4/Sonnet (pintar)    │
+│  └────────┬─────────┘  Creative → Claude/Opus              │
+│           │                                                  │
+│           ▼                                                  │
+│  ┌──────────────────┐                                        │
+│  │ 6. STREAM         │  Streaming response                  │
+│  │    RESPONSE       │  + async memory update               │
+│  └──────────────────┘                                        │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔧 5. CORE MODULES (Python)
+
+### 5.1 Project Structure
+
+```
+ai-chat-memory/
+├── 📁 app/
+│   ├── __init__.py
+│   ├── main.py                  # FastAPI entry point
+│   ├── config.py                # Settings & env vars
+│   │
+│   ├── 📁 api/
+│   │   ├── routes_chat.py       # Chat endpoints
+│   │   ├── routes_memory.py     # Memory management endpoints
+│   │   ├── routes_user.py       # User endpoints
+│   │   └── middleware.py        # Auth, rate limiting
+│   │
+│   ├── 📁 core/
+│   │   ├── orchestrator.py      # 🧠 Brain - main logic
+│   │   ├── query_classifier.py  # Classify query complexity
+│   │   ├── prompt_compiler.py   # Build optimized prompts
+│   │   ├── model_router.py      # Route to best model
+│   │   └── token_counter.py     # Track token usage
+│   │
+│   ├── 📁 memory/
+│   │   ├── memory_manager.py    # 🧠 Central memory controller
+│   │   ├── working_memory.py    # Redis - short buffer
+│   │   ├── short_term.py        # PostgreSQL - session summaries
+│   │   ├── long_term.py         # Vector DB - semantic memory
+│   │   ├── fact_extractor.py    # Extract facts from conversations
+│   │   ├── compressor.py        # Compress/summarize conversations
+│   │   └── decay_engine.py      # Memory decay & cleanup
+│   │
+│   ├── 📁 llm/
+│   │   ├── gateway.py           # Unified LLM interface
+│   │   ├── providers/
+│   │   │   ├── openai_provider.py
+│   │   │   ├── claude_provider.py
+│   │   │   └── local_provider.py  # Ollama/vLLM
+│   │   └── embeddings.py        # Embedding generator
+│   │
+│   ├── 📁 db/
+│   │   ├── postgres.py          # PostgreSQL connection
+│   │   ├── redis_client.py      # Redis connection
+│   │   ├── vector_store.py      # Qdrant/Pinecone client
+│   │   └── models.py            # SQLAlchemy models
+│   │
+│   └── 📁 utils/
+│       ├── hashing.py           # Prompt hashing for cache
+│       ├── logger.py            # Structured logging
+│       └── helpers.py
+│
+├── 📁 tests/
+├── 📁 scripts/
+│   ├── migrate_db.py
+│   └── seed_data.py
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+└── .env
+```
+
+### 5.2 Brain Orchestrator (Inti Logic)
+
+```python
+# app/core/orchestrator.py
+import asyncio
+from dataclasses import dataclass
+from typing import AsyncGenerator, Optional
+
+@dataclass
+class ProcessedQuery:
+    original: str
+    complexity: str          # "simple" | "moderate" | "complex"
+    category: str            # "coding" | "writing" | "research" | "casual"
+    needs_memory: bool       # Apakah perlu retrieve memory?
+    needs_tools: bool        # Apakah perlu external tools?
+    estimated_tokens: int
+
+class BrainOrchestrator:
+    """
+    Otak utama aplikasi. Mengorkestrasi semua komponen
+    untuk menghasilkan response yang optimal.
+    """
+
+    def __init__(
+        self,
+        memory_manager,
+        query_classifier,
+        prompt_compiler,
+        model_router,
+        llm_gateway,
+        cache_store,
+    ):
+        self.memory = memory_manager
+        self.classifier = query_classifier
+        self.prompt_compiler = prompt_compiler
+        self.router = model_router
+        self.llm = llm_gateway
+        self.cache = cache_store
+
+    async def process_message(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message: str,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Main pipeline: Message masuk → Response keluar (streaming)
+        """
+
+        # ━━━ STEP 1: Classify Query ━━━
+        query = await self.classifier.classify(message)
+        # Output: ProcessedQuery(complexity="moderate", category="coding", ...)
+
+        # ━━━ STEP 2: Check Cache ━━━
+        cached = await self.cache.get_response(message, user_id)
+        if cached:
+            yield cached
+            return
+
+        # ━━━ STEP 3: Retrieve Relevant Memory (PARALLEL) ━━━
+        working_mem, relevant_mem, user_profile = await asyncio.gather(
+            # Always: get recent messages (last 3-5)
+            self.memory.get_working_memory(user_id, conversation_id),
+            # Conditional: semantic search hanya jika perlu
+            self.memory.retrieve_relevant(user_id, message, top_k=3)
+                if query.needs_memory else asyncio.coroutine(lambda: [])(),
+            # Always: get user profile (cached in Redis)
+            self.memory.get_user_profile(user_id),
+        )
+
+        # ━━━ STEP 4: Compile Optimized Prompt ━━━
+        compiled_prompt = self.prompt_compiler.compile(
+            system_context=self._get_system_prompt(query.category),
+            user_profile=user_profile,
+            relevant_memories=relevant_mem,     # Only top-K relevant
+            recent_messages=working_mem,         # Only last 3-5
+            current_message=message,
+            max_context_tokens=self._get_max_context(query.complexity),
+        )
+
+        # ━━━ STEP 5: Route to Best Model ━━━
+        model = self.router.select_model(
+            complexity=query.complexity,
+            category=query.category,
+            token_budget=self._get_token_budget(user_id),
+        )
+        # simple → "gpt-3.5-turbo" (fast & cheap)
+        # moderate → "claude-3-haiku"
+        # complex → "gpt-4o" / "claude-3.5-sonnet"
+
+        # ━━━ STEP 6: Stream Response ━━━
+        full_response = ""
+        async for chunk in self.llm.stream(
+            model=model,
+            messages=compiled_prompt,
+            max_tokens=self._get_max_output(query.complexity),
+        ):
+            full_response += chunk
+            yield chunk
+
+        # ━━━ STEP 7: Post-Processing (ASYNC, non-blocking) ━━━
+        asyncio.create_task(
+            self._post_process(
+                user_id, conversation_id,
+                message, full_response, query
+            )
+        )
+
+    async def _post_process(
+        self, user_id, conversation_id,
+        user_msg, ai_response, query
+    ):
+        """Background tasks setelah response dikirim (tidak blocking user)"""
+
+        # Save messages ke DB
+        await self.memory.save_messages(
+            conversation_id, user_msg, ai_response
+        )
+
+        # Update working memory di Redis
+        await self.memory.update_working_memory(
+            user_id, conversation_id, user_msg, ai_response
+        )
+
+        # Extract & store facts (async, pakai model kecil/murah)
+        await self.memory.extract_and_store_facts(
+            user_id, conversation_id, user_msg, ai_response
+        )
+
+        # Compress jika working memory terlalu panjang
+        await self.memory.compress_if_needed(
+            user_id, conversation_id
+        )
+
+        # Cache response
+        await self.cache.store_response(user_msg, user_id, ai_response)
+
+    def _get_max_context(self, complexity: str) -> int:
+        """Token budget untuk context berdasarkan complexity"""
+        return {
+            "simple": 500,       # Hemat banget
+            "moderate": 2000,
+            "complex": 4000,
+        }.get(complexity, 2000)
+
+    def _get_max_output(self, complexity: str) -> int:
+        return {
+            "simple": 300,
+            "moderate": 1000,
+            "complex": 4000,
+        }.get(complexity, 1000)
+```
+
+### 5.3 Memory Manager
+
+```python
+# app/memory/memory_manager.py
+from datetime import datetime, timedelta
+import numpy as np
+
+class MemoryManager:
+    """
+    Manages 3-tier memory system:
+    Tier 1 (Working) → Redis
+    Tier 2 (Short-term) → PostgreSQL
+    Tier 3 (Long-term) → Vector DB
+    """
+
+    def __init__(self, redis, postgres, vector_store, embedder, compressor):
+        self.redis = redis
+        self.db = postgres
+        self.vectors = vector_store
+        self.embedder = embedder
+        self.compressor = compressor
+
+    # ═══════════════════════════════════════════
+    # TIER 1: WORKING MEMORY (Redis)
+    # ═══════════════════════════════════════════
+
+    async def get_working_memory(
+        self, user_id: str, conv_id: str, limit: int = 5
+    ) -> list[dict]:
+        """Get last N messages dari Redis (ultra-fast)"""
+        key = f"session:{user_id}:{conv_id}:messages"
+        messages = await self.redis.lrange(key, -limit, -1)
+        return [json.loads(m) for m in messages]
+
+    async def update_working_memory(
+        self, user_id, conv_id, user_msg, ai_response
+    ):
+        key = f"session:{user_id}:{conv_id}:messages"
+
+        # Push new messages
+        await self.redis.rpush(key, json.dumps({
+            "role": "user", "content": user_msg,
+            "timestamp": datetime.now().isoformat()
+        }))
+        await self.redis.rpush(key, json.dumps({
+            "role": "assistant", "content": ai_response,
+            "timestamp": datetime.now().isoformat()
+        }))
+
+        # Keep only last 10 messages (5 pairs)
+        await self.redis.ltrim(key, -10, -1)
+
+        # Set TTL 30 minutes
+        await self.redis.expire(key, 1800)
+
+    # ═══════════════════════════════════════════
+    # TIER 2: SHORT-TERM MEMORY (PostgreSQL)
+    # ═══════════════════════════════════════════
+
+    async def compress_if_needed(self, user_id: str, conv_id: str):
+        """
+        Jika conversation sudah > 20 messages,
+        compress older messages menjadi summary
+        """
+        msg_count = await self.db.get_message_count(conv_id)
+
+        if msg_count > 20:
+            # Ambil messages lama (bukan 5 terakhir)
+            old_messages = await self.db.get_messages(
+                conv_id, offset=0, limit=msg_count - 5
+            )
+
+            # Compress pakai model kecil & murah
+            summary = await self.compressor.summarize(
+                old_messages,
+                max_tokens=200,  # Compress jadi max 200 token
+                model="gpt-3.5-turbo"  # Model murah untuk kompresi
+            )
+
+            # Save summary, mark old messages as compressed
+            await self.db.save_session_summary(
+                user_id, conv_id, summary,
+                original_tokens=count_tokens(old_messages),
+                compressed_tokens=count_tokens(summary),
+            )
+
+            # Mark old messages (bisa di-delete atau flag)
+            await self.db.mark_compressed(conv_id, msg_count - 5)
+
+    # ═══════════════════════════════════════════
+    # TIER 3: LONG-TERM MEMORY (Vector DB)
+    # ═══════════════════════════════════════════
+
+    async def retrieve_relevant(
+        self, user_id: str, query: str, top_k: int = 3
+    ) -> list[dict]:
+        """
+        Semantic search: cari memory yang RELEVAN dengan query saat ini.
+        Hanya return top-K → hemat token!
+        """
+        # Generate embedding dari query user
+        query_embedding = await self.embedder.embed(query)
+
+        # Search di Vector DB dengan filter user_id
+        results = await self.vectors.search(
+            collection="user_memories",
+            vector=query_embedding,
+            filter={"user_id": user_id, "decay_score": {"$gt": 0.3}},
+            top_k=top_k,
+        )
+
+        # Update access count & decay score
+        for r in results:
+            await self._boost_memory(r["id"])
+
+        return [
+            {"content": r["content"], "relevance": r["score"]}
+            for r in results
+            if r["score"] > 0.7  # Threshold relevansi
+        ]
+
+    async def extract_and_store_facts(
+        self, user_id, conv_id, user_msg, ai_response
+    ):
+        """
+        Extract factual information dari percakapan
+        dan simpan ke long-term memory.
+
+        Contoh:
+        User: "Saya kerja sebagai data scientist di Tokopedia"
+        → Extract: {type: "personal", key: "job", value: "Data Scientist"}
+        → Extract: {type: "personal", key: "company", value: "Tokopedia"}
+        """
+        # Pakai model kecil untuk extract facts
+        extraction_prompt = f"""
+        Extract factual information from this conversation.
+        Return JSON array of facts. Only extract CLEAR facts.
+
+        User: {user_msg}
+        Assistant: {ai_response}
+
+        Format: [{{"type": "personal|preference|knowledge",
+                   "key": "...", "value": "..."}}]
+        """
+
+        facts = await self.llm.complete(
+            model="gpt-3.5-turbo",  # Model murah
+            prompt=extraction_prompt,
+            max_tokens=200,
+        )
+
+        for fact in parse_facts(facts):
+            # Check if fact already exists (avoid duplicates)
+            existing = await self.db.find_fact(
+                user_id, fact["type"], fact["key"]
+            )
+
+            if existing:
+                # Update existing fact
+                await self.db.update_fact(existing["id"], fact["value"])
+            else:
+                # Store new fact + embedding
+                embedding = await self.embedder.embed(
+                    f"{fact['key']}: {fact['value']}"
+                )
+
+                await self.vectors.upsert(
+                    collection="user_memories",
+                    id=str(uuid4()),
+                    vector=embedding,
+                    payload={
+                        "user_id": user_id,
+                        "fact_type": fact["type"],
+                        "content": f"{fact['key']}: {fact['value']}",
+                        "source_conversation_id": conv_id,
+                        "created_at": datetime.now().isoformat(),
+                        "decay_score": 1.0,
+                        "access_count": 0,
+                    }
+                )
+
+                # Also store in PostgreSQL for fast lookup
+                await self.db.insert_fact(user_id, conv_id, fact)
+
+    # ═══════════════════════════════════════════
+    # MEMORY DECAY (Cleanup)
+    # ═══════════════════════════════════════════
+
+    async def run_decay_cycle(self):
+        """
+        Jalankan periodic (cron job) untuk decay memory
+        yang jarang diakses. Hemat storage!
+        """
+        all_facts = await self.db.get_all_facts_for_decay()
+
+        for fact in all_facts:
+            days_since_access = (
+                datetime.now() - fact["last_accessed"]
+            ).days
+
+            # Decay formula: score *= 0.95^days_since_last_access
+            new_decay = fact["decay_score"] * (0.95 ** days_since_access)
+
+            if new_decay < 0.1:
+                # Memory terlalu lama tidak diakses → archive/delete
+                await self.db.archive_fact(fact["id"])
+                await self.vectors.delete(fact["id"])
+            else:
+                await self.db.update_decay_score(fact["id"], new_decay)
+```
+
+### 5.4 Query Classifier & Model Router
+
+```python
+# app/core/query_classifier.py
+
+class QueryClassifier:
+    """
+    Classify query TANPA panggil LLM (rule-based + small model)
+    → Zero extra token cost!
+    """
+
+    # Keywords untuk fast classification
+    SIMPLE_PATTERNS = [
+        r"^(hi|hello|halo|hey|thanks|ok|oke|terima kasih)",
+        r"^(apa itu|what is|siapa|who is) \w{1,20}$",
+        r"^(ya|tidak|yes|no|iya|bukan)$",
+    ]
+
+    COMPLEX_PATTERNS = [
+        r"(buatkan|buat|create|build|develop|implement)",
+        r"(analisis|analyze|compare|bandingkan|evaluasi)",
+        r"(jelaskan secara detail|explain in detail|step by step)",
+        r"(debug|fix|refactor|optimize)",
+        r"(essay|artikel|paper|laporan|report)",
+    ]
+
+    CODING_PATTERNS = [
+        r"(code|kode|function|fungsi|class|api|database|sql|python|javascript)",
+        r"(bug|error|exception|traceback)",
+    ]
+
+    async def classify(self, message: str) -> ProcessedQuery:
+        message_lower = message.lower().strip()
+        word_count = len(message.split())
+
+        # Rule-based classification (instant, no API call)
+        complexity = self._detect_complexity(message_lower, word_count)
+        category = self._detect_category(message_lower)
+        needs_memory = self._needs_memory(message_lower)
+
+        return ProcessedQuery(
+            original=message,
+            complexity=complexity,
+            category=category,
+            needs_memory=needs_memory,
+            needs_tools="search" in message_lower or "cari" in message_lower,
+            estimated_tokens=word_count * 1.5,
+        )
+
+    def _detect_complexity(self, msg: str, word_count: int) -> str:
+        if word_count < 10 and any(
+            re.match(p, msg) for p in self.SIMPLE_PATTERNS
+        ):
+            return "simple"
+
+        if any(re.search(p, msg) for p in self.COMPLEX_PATTERNS):
+            return "complex"
+
+        if word_count > 50:
+            return "complex"
+
+        return "moderate"
+
+    def _needs_memory(self, msg: str) -> bool:
+        """Apakah query ini butuh long-term memory?"""
+        memory_triggers = [
+            "kemarin", "sebelumnya", "yang tadi", "ingat",
+            "remember", "previously", "last time", "you said",
+            "seperti yang", "sudah pernah", "yang lalu",
+        ]
+        return any(trigger in msg for trigger in memory_triggers)
+
+
+# app/core/model_router.py
+
+class ModelRouter:
+    """
+    Route ke model yang paling cost-effective
+    berdasarkan complexity query.
+    """
+
+    MODEL_TIERS = {
+        "simple": {
+            "primary": "gpt-3.5-turbo",      # $0.0005/1K tokens
+            "fallback": "claude-3-haiku",
+        },
+        "moderate": {
+            "primary": "gpt-4o-mini",         # $0.00015/1K tokens
+            "fallback": "claude-3-haiku",
+        },
+        "complex": {
+            "primary": "claude-3.5-sonnet",   # Best quality/price
+            "fallback": "gpt-4o",
+        },
+        "creative": {
+            "primary": "claude-3.5-sonnet",
+            "fallback": "gpt-4o",
+        },
+    }
+
+    def select_model(
+        self, complexity: str, category: str, token_budget: int
+    ) -> str:
+        # Jika user hampir kehabisan budget → paksa model murah
+        if token_budget < 1000:
+            return "gpt-3.5-turbo"
+
+        tier = self.MODEL_TIERS.get(complexity, self.MODEL_TIERS["moderate"])
+        return tier["primary"]
+```
+
+### 5.5 Prompt Compiler (Token-Optimized)
+
+```python
+# app/core/prompt_compiler.py
+
+class PromptCompiler:
+    """
+    Compile prompt yang MINIMAL tapi MAKSIMAL informasi.
+    Setiap token harus berguna!
+    """
+
+    SYSTEM_PROMPTS = {
+        "coding": """You are a senior developer. Be concise. Use code blocks.
+Skip explanations unless asked. Reply in user's language.""",
+
+        "writing": """You are a skilled writer. Match user's tone and style.
+Be creative but concise. Reply in user's language.""",
+
+        "research": """You are a research analyst. Cite sources when possible.
+Be thorough but structured. Use bullet points.""",
+
+        "casual": """You are a friendly AI assistant. Be natural and brief.
+Reply in user's language. Remember context from memory.""",
+
+        "default": """You are a helpful AI assistant. Be concise and accurate.
+Reply in user's language.""",
+    }
+
+    def compile(
+        self,
+        system_context: str,
+        user_profile: dict,
+        relevant_memories: list,
+        recent_messages: list,
+        current_message: str,
+        max_context_tokens: int = 2000,
+    ) -> list[dict]:
+        """
+        Build final prompt array yang dioptimasi.
+
+        Structure:
+        1. System prompt (compact)
+        2. User profile (1 line)
+        3. Relevant memories (top-K only)
+        4. Recent messages (last 3-5 only)
+        5. Current message
+        """
+
+        messages = []
+
+        # ── 1. System Prompt (compact) ──
+        system_content = system_context
+
+        # ── 2. Inject User Profile (1 line summary) ──
+        if user_profile:
+            profile_line = self._compile_profile(user_profile)
+            system_content += f"\n\n[USER PROFILE] {profile_line}"
+
+        # ── 3. Inject Relevant Memories (max 3) ──
+        if relevant_memories:
+            mem_text = "\n".join(
+                f"- {m['content']}" for m in relevant_memories[:3]
+            )
+            system_content += f"\n\n[RELEVANT MEMORY]\n{mem_text}"
+
+        messages.append({"role": "system", "content": system_content})
+
+        # ── 4. Recent Messages (already trimmed to last 5) ──
+        token_used = count_tokens(system_content)
+        remaining = max_context_tokens - token_used - count_tokens(current_message)
+
+        for msg in recent_messages:
+            msg_tokens = count_tokens(msg["content"])
+            if remaining - msg_tokens < 0:
+                break
+            messages.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+            remaining -= msg_tokens
+
+        # ── 5. Current Message ──
+        messages.append({"role": "user", "content": current_message})
+
+        return messages
+
+    def _compile_profile(self, profile: dict) -> str:
+        """Compress user profile jadi 1 line"""
+        parts = []
+        if profile.get("name"):
+            parts.append(f"Name:{profile['name']}")
+        if profile.get("language_pref"):
+            parts.append(f"Lang:{profile['language_pref']}")
+        if profile.get("expertise_level"):
+            parts.append(f"Level:{profile['expertise_level']}")
+        if profile.get("interests"):
+            parts.append(f"Interest:{','.join(profile['interests'][:3])}")
+        return " | ".join(parts)
+        # Output: "Name:Budi | Lang:id | Level:advanced | Interest:python,ML"
+```
+
+---
+
+## 🌐 6. API ENDPOINTS
+
+```python
+# app/api/routes_chat.py
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import StreamingResponse
+
+app = FastAPI(title="AI Chat with Memory")
+
+# ━━━ REST API ━━━
+
+@app.post("/api/v1/chat")
+async def chat(request: ChatRequest):
+    """Standard chat endpoint (streaming)"""
+    return StreamingResponse(
+        orchestrator.process_message(
+            user_id=request.user_id,
+            conversation_id=request.conversation_id,
+            message=request.message,
+        ),
+        media_type="text/event-stream",
+    )
+
+@app.get("/api/v1/conversations/{user_id}")
+async def list_conversations(user_id: str, limit: int = 20):
+    """List user's conversations"""
+
+@app.get("/api/v1/conversations/{conv_id}/messages")
+async def get_messages(conv_id: str, limit: int = 50):
+    """Get messages in a conversation"""
+
+@app.get("/api/v1/memory/{user_id}")
+async def get_user_memory(user_id: str):
+    """View what AI remembers about user"""
+
+@app.delete("/api/v1/memory/{user_id}/{fact_id}")
+async def forget_fact(user_id: str, fact_id: str):
+    """User can delete specific memories"""
+
+@app.post("/api/v1/memory/{user_id}/teach")
+async def teach_memory(user_id: str, fact: TeachRequest):
+    """User can explicitly teach AI something"""
+
+# ━━━ WEBSOCKET (Real-time) ━━━
+
+@app.websocket("/ws/chat/{user_id}")
+async def websocket_chat(websocket: WebSocket, user_id: str):
+    """WebSocket for real-time chat"""
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_json()
+        async for chunk in orchestrator.process_message(
+            user_id=user_id,
+            conversation_id=data["conversation_id"],
+            message=data["message"],
+        ):
+            await websocket.send_json({
+                "type": "chunk", "content": chunk
+            })
+        await websocket.send_json({"type": "done"})
+```
+
+---
+
+## 🐳 7. DEPLOYMENT (Docker Compose)
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  # ── Main App ──
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/aichat
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+
+  # ── PostgreSQL ──
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aichat
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+
+  # ── Qdrant (Vector DB) ──
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+
+  # ── Background Worker (Memory Decay, Compression) ──
+  worker:
+    build: .
+    command: python -m app.workers.memory_worker
+    environment:
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/aichat
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  pgdata:
+  qdrant_data:
+```
+
+---
+
+## 📈 8. TOKEN SAVINGS ANALYSIS
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│           TOKEN USAGE COMPARISON (per conversation)          │
+│                                                              │
+│  Approach              Tokens/msg   After 50 msgs   Cost*    │
+│  ──────────────────────────────────────────────────────────  │
+│  ❌ Naive (send all)    ~50,000     ~2,500,000     $5.00    │
+│     (kirim semua history)                                    │
+│                                                              │
+│  ⚠️  Sliding Window      ~5,000      ~250,000      $0.50    │
+│     (last 20 messages)                                       │
+│                                                              │
+│  ✅ THIS BLUEPRINT       ~1,500      ~75,000       $0.15    │
+│     (3-tier memory +                                         │
+│      smart retrieval +                                       │
+│      model routing)                                          │
+│                                                              │
+│  💰 SAVINGS: ~97% vs naive, ~70% vs sliding window           │
+│                                                              │
+│  * Based on GPT-4o pricing ($2.50/1M input tokens)           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔑 9. KEY OPTIMIZATIONS SUMMARY
+
+| Strategi | Penghematan | Cara Kerja |
+|---|---|---|
+| **🧠 3-Tier Memory** | ~70% token | Hanya kirim yang relevan, bukan semua history |
+| **🔀 Model Routing** | ~60% cost | Query simple → model murah, complex → model pintar |
+| **📦 Compression** | ~80% storage | Summarize old conversations jadi compact |
+| **⚡ Response Cache** | 100% (cache hit) | Pertanyaan identik → instant response |
+| **🔍 Semantic Search** | ~90% token | Top-3 relevant memory vs entire history |
+| **📉 Memory Decay** | Storage savings | Auto-archive memory yang tidak pernah diakses |
+| **🏃 Async Post-process** | Faster UX | Extract facts & compress SETELAH response dikirim |
+| **📏 Rule-based Classifier** | 0 extra token | Classify query tanpa API call |
+
+---
+
+## 🚀 10. QUICK START
+
+```bash
+# 1. Clone & Setup
+git clone <repo>
+cd ai-chat-memory
+cp .env.example .env  # Fill API keys
+
+# 2. Start Services
+docker-compose up -d
+
+# 3. Run Migrations
+python scripts/migrate_db.py
+
+# 4. Start App
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 5. Test
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user1", "conversation_id": "conv1", "message": "Halo!"}'
+```
+
+---
+
+Blueprint ini dirancang agar:
+- **🚀 Fast** → Streaming + Redis cache + async processing
+- **💰 Hemat Token** → 3-tier memory + smart retrieval + model routing
+- **🧠 Smart Memory** → AI ingat context jangka panjang tanpa kirim semua history
+- **📈 Scalable** → Microservice-ready, Docker-based, modular
+- **🔧 Extensible** → Plugin system untuk tools, multi-provider LLM

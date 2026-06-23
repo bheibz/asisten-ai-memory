@@ -1,0 +1,6 @@
+ai-chat-memory/venv/
+ai-chat-memory/data/
+ai-chat-memory/**/__pycache__/
+ai-chat-memory/**/*.pyc
+ai-chat-memory/.env
+/tmp/

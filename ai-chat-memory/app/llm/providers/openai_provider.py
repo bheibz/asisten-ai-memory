@@ -1,0 +1,33 @@
+from typing import AsyncGenerator
+
+from openai import AsyncOpenAI
+
+from app.config import settings
+
+
+class OpenAIProvider:
+
+    def __init__(self):
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+    async def stream(self, model: str, messages: list[dict], max_tokens: int = 1000, temperature: float = 0.7) -> AsyncGenerator[str, None]:
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+        )
+        async for chunk in response:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                yield delta.content
+
+    async def complete(self, model: str, prompt: str, max_tokens: int = 200, temperature: float = 0.3) -> str:
+        response = await self.client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content or ""
