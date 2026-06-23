@@ -16,4 +16,4 @@ async def get_user(user_id: str, db: PostgresDB = Depends(get_session)):
     user = await db.get_user(user_id)
     if not user:
         return {"error": "User not found"}, 404
-    return {"id": str(user.id), "username": user.username, "profile": user.ai_profile}
+    return {"id": str(user.id), "username": user.username, "profile": user.user_profile, "preferred_ai_name": user.preferred_ai_name}

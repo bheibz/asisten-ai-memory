@@ -18,14 +18,11 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=True)
     settings = Column(JSON, default=dict)
-    ai_profile = Column(JSON, default=lambda: {
+    user_profile = Column(JSON, default=lambda: {
         "name": None,
         "language_pref": "id",
-        "expertise_level": "general",
-        "interests": [],
-        "communication_style": "casual",
-        "known_facts": {},
     })
+    preferred_ai_name = Column(String(50), nullable=True)
     total_tokens_used = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

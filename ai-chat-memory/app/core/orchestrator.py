@@ -79,9 +79,7 @@ class BrainOrchestrator:
                 await session.execute(insert(UserModel).values(id=user_id, username=user_id))
                 await session.commit()
             if cmd_type == "ganti_namamu":
-                profile = await db.get_user_profile(user_id)
-                profile["ai_name"] = cmd_val
-                await db.update_user_profile(user_id, profile)
+                await db.set_preferred_ai_name(user_id, cmd_val)
                 return f"✅ Oke, panggil aku *{cmd_val}* mulai sekarang!"
             if cmd_type == "ganti_namaku":
                 profile = await db.get_user_profile(user_id)
@@ -174,7 +172,7 @@ class BrainOrchestrator:
             pass
 
         tone = self._detect_tone(message)
-        custom_name = user_profile.get("ai_name") if user_profile else None
+        custom_name = await self.memory.db.get_preferred_ai_name(user_id)
         system_ctx = self._get_system_prompt(query.category, tone) + time_context
         if web_results:
             from app.tools.web_search import web_search as ws
@@ -269,9 +267,7 @@ class BrainOrchestrator:
                     await session.execute(insert(UserModel).values(id=user_id, username=user_id))
                     await session.commit()
                 if cmd == "ganti_namamu":
-                    profile = await db.get_user_profile(user_id)
-                    profile["ai_name"] = content
-                    await db.update_user_profile(user_id, profile)
+                    await db.set_preferred_ai_name(user_id, content)
                     return f"✅ Oke, panggil aku *{content}* mulai sekarang!"
                 elif cmd == "ganti_namaku":
                     profile = await db.get_user_profile(user_id)

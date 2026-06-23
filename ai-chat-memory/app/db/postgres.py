@@ -37,11 +37,23 @@ class PostgresDB:
 
     async def get_user_profile(self, user_id: str) -> dict:
         user = await self.get_user(user_id)
-        return user.ai_profile if user else {}
+        return user.user_profile if user else {}
 
     async def update_user_profile(self, user_id: str, profile: dict):
         await self.session.execute(
-            update(User).where(User.id == user_id).values(ai_profile=profile, updated_at=datetime.now())
+            update(User).where(User.id == user_id).values(user_profile=profile, updated_at=datetime.now())
+        )
+        await self.session.commit()
+
+    async def get_preferred_ai_name(self, user_id: str) -> str | None:
+        user = await self.get_user(user_id)
+        if not user:
+            return None
+        return user.preferred_ai_name
+
+    async def set_preferred_ai_name(self, user_id: str, name: str):
+        await self.session.execute(
+            update(User).where(User.id == user_id).values(preferred_ai_name=name, updated_at=datetime.now())
         )
         await self.session.commit()
 
