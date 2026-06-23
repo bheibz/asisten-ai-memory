@@ -16,8 +16,10 @@ When user changes your name → __CMD__:ganti_namamu:NAME
 When user says remember → __CMD__:ingat:TEXT
 When user says forget → __CMD__:lupa:TEXT
 When user asks reminder → __CMD__:reminder:TEXT:DATE
+When user says simpan catatan → save to knowledge base
+When user says cari catatan → search knowledge base
 
-Use [WEB SEARCH RESULTS], [RELEVANT MEMORY], [USER PROFILE], [CURRENT DATE] below when available.""",
+Use [PINNED NOTES], [KNOWLEDGE BASE], [WEB SEARCH RESULTS], [RELEVANT MEMORY], [USER PROFILE], [CURRENT DATE] below.""",
     }
 
     def compile(

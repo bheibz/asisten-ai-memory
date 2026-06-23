@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import select, func, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Conversation, MemoryFact, Message, Reminder, SessionSummary, User
+from app.db.models import Conversation, KnowledgeBase, MemoryFact, Message, Reminder, SessionSummary, User
 from app.db.database import async_session
 
 
@@ -215,3 +215,54 @@ class PostgresDB:
                 update(Message).where(Message.id == msg_id).values(extra=extra)
             )
             await self.session.commit()
+
+    async def create_knowledge(self, user_id: str, title: str, content: str, tags: list = None, source: str = "chat", is_pinned: bool = False) -> KnowledgeBase:
+        kb = KnowledgeBase(user_id=user_id, title=title, content=content, tags=tags or [], source=source, is_pinned=is_pinned)
+        self.session.add(kb)
+        await self.session.commit()
+        await self.session.refresh(kb)
+        return kb
+
+    async def get_knowledge(self, user_id: str, limit: int = 50):
+        result = await self.session.execute(
+            select(KnowledgeBase).where(KnowledgeBase.user_id == user_id)
+            .order_by(KnowledgeBase.is_pinned.desc(), KnowledgeBase.updated_at.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def search_knowledge(self, user_id: str, query: str, limit: int = 5):
+        keyword = f"%{query}%"
+        result = await self.session.execute(
+            select(KnowledgeBase).where(
+                KnowledgeBase.user_id == user_id,
+                (KnowledgeBase.title.ilike(keyword)) | (KnowledgeBase.content.ilike(keyword))
+            ).order_by(KnowledgeBase.is_pinned.desc()).limit(limit)
+        )
+        return result.scalars().all()
+
+    async def get_pinned_knowledge(self, user_id: str, limit: int = 3):
+        result = await self.session.execute(
+            select(KnowledgeBase).where(KnowledgeBase.user_id == user_id, KnowledgeBase.is_pinned == True)
+            .order_by(KnowledgeBase.updated_at.desc()).limit(limit)
+        )
+        return result.scalars().all()
+
+    async def delete_knowledge(self, kb_id: str):
+        await self.session.execute(delete(KnowledgeBase).where(KnowledgeBase.id == kb_id))
+        await self.session.commit()
+
+    async def toggle_pin_knowledge(self, kb_id: str):
+        result = await self.session.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id))
+        kb = result.scalar_one_or_none()
+        if kb:
+            await self.session.execute(
+                update(KnowledgeBase).where(KnowledgeBase.id == kb_id).values(is_pinned=~kb.is_pinned)
+            )
+            await self.session.commit()
+
+    async def count_knowledge(self, user_id: str) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(KnowledgeBase).where(KnowledgeBase.user_id == user_id)
+        )
+        return result.scalar() or 0

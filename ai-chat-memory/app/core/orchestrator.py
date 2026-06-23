@@ -13,12 +13,17 @@ from app.tools.web_search import web_search
 MEMORY_COMMANDS = {
     "ganti_namamu": r"(?:aku\s+)?(?:ganti|ubah|set|panggil)\s+(?:(?:nama\s+)?kamu|namamu)\s+(?:menjadi|jadi|:)?\s*([a-zA-Z0-9_]+)",
     "ganti_namaku": r"(?:aku\s+)?(?:ganti|ubah|set|panggil)\s+(?:(?:nama\s+)?(?:aku|saya)|namaku)\s+(?:menjadi|jadi|:)?\s*([a-zA-Z0-9_]+)",
-    "ingat": r"(?:ingat|catat|simpan|remember|save|note)\s+(?:bahwa|:|\s)?\s*(.+)",
+    "ingat": r"(?:ingat|catat|remember|save|note)\s+(?:bahwa|:|\s)?\s*(.+)",
     "lupa": r"(?:lupa|forget|hapus|delete|remove)\s+(?:bahwa|:|\s)?\s*(.+)",
     "update": r"(?:perbaharui|ubah|update|ganti|edit|change)\s+(?:catatan|memory|memori|note)?\s*(?:tentang|mengenai|:)?\s*(.+)",
 }
 
 FOLLOWUP_WORDS = {"terus", "lanjut", "detail", "jelasin", "jelaskan", "lebih", "coba lagi", "cari", "cek", "lagi"}
+
+KNOWLEDGE_COMMANDS = {
+    "simpan": r"(?:simpan|catat|save|note)\s+(?:catatan|knowledge|pengetahuan)?\s*[:\-]?\s*([\s\S]+)",
+    "cari_catatan": r"(?:cari|search)\s+(?:di\s+)?(?:catatan|knowledge|notes|pengetahuan)\s+(.+)",
+}
 SAD_WORDS = {"sedih", "kecewa", "sakit", "lelah", "sendiri", "betah", "pusing"}
 ANGRY_WORDS = {"marah", "kesal", "sebal", "geram", "jengkel"}
 HAPPY_WORDS = {"senang", "bahagia", "syukur", "ceria", "happy", "seneng"}
@@ -162,6 +167,31 @@ class BrainOrchestrator:
             yield "\n__STATUS__:🌐 Mencari di web...\n"
             web_results = await web_search.search(search_query, max_results=5)
 
+        from app.db.database import async_session as _async_session
+        from app.db.postgres import PostgresDB as _PostgresDB
+        knowledge_ctx = ""
+        try:
+            async with _async_session() as _s:
+                _db = _PostgresDB(_s)
+                pinned = await _db.get_pinned_knowledge(user_id)
+                if pinned:
+                    lines = ["[PINNED NOTES]"]
+                    for kb in pinned:
+                        tag_str = f" #{' #'.join(kb.tags)}" if kb.tags else ""
+                        lines.append(f"📌 {kb.title}{tag_str}")
+                        if kb.content:
+                            lines.append(f"   {kb.content[:200]}")
+                    knowledge_ctx = "\n" + "\n".join(lines)
+                if query.needs_search or query.needs_tools:
+                    searched = await _db.search_knowledge(user_id, message, 3)
+                    if searched:
+                        lines = ["[KNOWLEDGE BASE]"]
+                        for kb in searched:
+                            lines.append(f"• {kb.title}: {kb.content[:200]}")
+                        knowledge_ctx += "\n" + "\n".join(lines)
+        except Exception:
+            pass
+
         yield "\n__STATUS__:💭 Menulis respons...\n"
 
         date_str = f"hari {days[now.weekday()]}, {now.day} {months_id[now.month-1]} {now.year}"
@@ -177,7 +207,7 @@ class BrainOrchestrator:
 
         tone = self._detect_tone(message)
         custom_name = await self.memory.db.get_preferred_ai_name(user_id)
-        system_ctx = self._get_system_prompt(query.category, tone) + time_context
+        system_ctx = self._get_system_prompt(query.category, tone) + time_context + knowledge_ctx
         if web_results:
             from app.tools.web_search import web_search as ws
             system_ctx += f"\n\n{ws.format_for_prompt(web_results, search_query)}"
@@ -322,6 +352,45 @@ class BrainOrchestrator:
                             await vector_store.delete(f.id)
                             return f"🗑️ Dihapus! *{f.fact_key}: {f.fact_value}*"
                     return f"🔍 Tidak nemu *{content}*"
+        for cmd, pattern in KNOWLEDGE_COMMANDS.items():
+            match = re.match(pattern, msg_lower)
+            if not match:
+                continue
+            content = match.group(1).strip()
+            if not content:
+                continue
+            from app.db.database import async_session
+            from app.db.postgres import PostgresDB
+            async with async_session() as session:
+                db = PostgresDB(session)
+                user = await db.get_user(user_id)
+                if not user:
+                    from app.db.models import User as UserModel
+                    from sqlalchemy import insert
+                    await session.execute(insert(UserModel).values(id=user_id, username=user_id))
+                    await session.commit()
+                if cmd == "simpan":
+                    parts = content.split("\n", 1)
+                    title = parts[0].strip()[:200]
+                    body = parts[1].strip() if len(parts) > 1 else ""
+                    tags_prompt = ""
+                    if not body:
+                        body = title
+                        title = title[:60]
+                    kb = await db.create_knowledge(user_id, title, body, source="chat")
+                    return f"✅ Catatan disimpan: *{kb.title}* (id: {kb.id[:8]}...)"
+                elif cmd == "cari_catatan":
+                    results = await db.search_knowledge(user_id, content, 3)
+                    if not results:
+                        return f"🔍 Tidak nemu catatan tentang *{content}*"
+                    lines = [f"📚 Catatan ditemukan:"]
+                    for kb in results:
+                        tag_str = f" #{' #'.join(kb.tags)}" if kb.tags else ""
+                        flag = " 📌" if kb.is_pinned else ""
+                        lines.append(f"• *{kb.title}*{flag}{tag_str}")
+                        if kb.content:
+                            lines.append(f"  {kb.content[:150]}")
+                    return "\n".join(lines)
         return None
 
     async def _post_process(self, user_id: str, conversation_id: str, user_msg: str, ai_response: str, query):

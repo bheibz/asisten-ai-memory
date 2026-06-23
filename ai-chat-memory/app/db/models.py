@@ -110,3 +110,17 @@ class Reminder(Base):
     remind_at = Column(DateTime, nullable=False)
     is_shown = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
+
+
+class KnowledgeBase(Base):
+    __tablename__ = "knowledge_base"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    tags = Column(JSON, default=list)
+    source = Column(String(50), default="chat")
+    is_pinned = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
