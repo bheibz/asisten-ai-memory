@@ -18,7 +18,7 @@ MEMORY_COMMANDS = {
     "update": r"(?:perbaharui|ubah|update|ganti|edit|change)\s+(?:catatan|memory|memori|note)?\s*(?:tentang|mengenai|:)?\s*(.+)",
 }
 
-FOLLOWUP_WORDS = {"terus", "lanjut", "detail", "jelasin", "jelaskan", "lebih", "coba lagi"}
+FOLLOWUP_WORDS = {"terus", "lanjut", "detail", "jelasin", "jelaskan", "lebih", "coba lagi", "cari", "cek", "lagi"}
 SAD_WORDS = {"sedih", "kecewa", "sakit", "lelah", "sendiri", "betah", "pusing"}
 ANGRY_WORDS = {"marah", "kesal", "sebal", "geram", "jengkel"}
 HAPPY_WORDS = {"senang", "bahagia", "syukur", "ceria", "happy", "seneng"}
@@ -143,12 +143,11 @@ class BrainOrchestrator:
         search_query = message
         needs_web = query.needs_search or query.needs_time or query.needs_tools
 
-        is_followup = any(w in msg_lower for w in FOLLOWUP_WORDS or bool(re.search(r"cek (di|ke)\s+(internet|online|web|google)", msg_lower)))
+        is_followup = any(w in msg_lower for w in FOLLOWUP_WORDS)
         if is_followup:
             last_msg = self._get_last_user_msg(working_mem)
-            if last_msg:
+            if last_msg and needs_web:
                 search_query = last_msg
-                needs_web = True
 
         if needs_web:
             if "hijri" in search_query.lower():

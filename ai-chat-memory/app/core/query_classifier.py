@@ -52,7 +52,8 @@ class QueryClassifier:
     ]
 
     FACTUAL_PATTERNS = [
-        r"^(siapa|apa|berapa|kapan|dimana|bagaimana|kenapa|mengapa)",
+        r"(siapa|apa|berapa|kapan|dimana|bagaimana|kenapa|mengapa)",
+        r"itu\s+(siapa|apa|berapa|kapan|dimana|bagaimana)",
         r"(berita|news|info terbaru)",
         r"(tanggal|hari)\s+(berapa|apa|ini)",
         r"(cuaca|weather|suhu|temperature)",
