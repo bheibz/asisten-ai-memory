@@ -18,7 +18,7 @@ from app.api.routes_memory import router as memory_router
 from app.api.routes_user import router as user_router
 from app.api.routes_knowledge import router as knowledge_router
 from app.api.routes_reminder import router as reminder_router
-from app.api.middleware import logging_middleware
+from app.api.middleware import logging_middleware, error_handling_middleware
 from app.utils.logger import setup_logger
 
 logger = setup_logger(__name__, settings.log_level)
@@ -57,6 +57,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.middleware("http")(error_handling_middleware)
 app.middleware("http")(logging_middleware)
 
 app.include_router(chat_router)
