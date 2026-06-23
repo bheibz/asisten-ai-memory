@@ -1,42 +1,67 @@
 import pytest
-from app.core.orchestrator import BrainOrchestrator, SAD_WORDS, ANGRY_WORDS, HAPPY_WORDS
+from app.core.context_builder import ContextBuilder
 
 
 @pytest.fixture
-def orch():
-    return BrainOrchestrator(None)
+def ctx():
+    return ContextBuilder()
 
 
-def test_tone_neutral(orch):
-    tone = orch._detect_tone("apa kabar")
+def test_tone_neutral(ctx):
+    tone = ctx.detect_tone("apa kabar")
     assert tone == "neutral"
 
 
-def test_tone_sad(orch):
-    tone = orch._detect_tone("aku sedih hari ini")
+def test_tone_sad(ctx):
+    tone = ctx.detect_tone("aku sedih hari ini")
     assert tone == "sympathetic"
 
 
-def test_tone_angry(orch):
-    tone = orch._detect_tone("aku marah!")
+def test_tone_angry(ctx):
+    tone = ctx.detect_tone("aku marah!")
     assert tone == "calm"
 
 
-def test_tone_happy(orch):
-    tone = orch._detect_tone("aku senang sekali")
+def test_tone_happy(ctx):
+    tone = ctx.detect_tone("aku senang sekali")
     assert tone == "cheerful"
 
 
+def test_tone_anxious(ctx):
+    tone = ctx.detect_tone("aku cemas sekali")
+    assert tone == "anxious"
+
+
+def test_tone_tired(ctx):
+    tone = ctx.detect_tone("aku capek banget")
+    assert tone == "tired"
+
+
+# ── Verify tone word sets still exist ─────────────────────────
+
 def test_tone_words_sad():
-    assert "sedih" in SAD_WORDS
-    assert "lelah" in SAD_WORDS
+    from app.core.context_builder import _TONE_MAP
+    assert "sedih" in _TONE_MAP["sympathetic"]
+    assert "lelah" in _TONE_MAP["sympathetic"]
 
 
 def test_tone_words_angry():
-    assert "marah" in ANGRY_WORDS
-    assert "kesal" in ANGRY_WORDS
+    from app.core.context_builder import _TONE_MAP
+    assert "marah" in _TONE_MAP["calm"]
+    assert "kesal" in _TONE_MAP["calm"]
 
 
 def test_tone_words_happy():
-    assert "senang" in HAPPY_WORDS
-    assert "bahagia" in HAPPY_WORDS
+    from app.core.context_builder import _TONE_MAP
+    assert "senang" in _TONE_MAP["cheerful"]
+    assert "bahagia" in _TONE_MAP["cheerful"]
+
+
+def test_tone_words_anxious():
+    from app.core.context_builder import _TONE_MAP
+    assert "cemas" in _TONE_MAP["anxious"]
+
+
+def test_tone_words_tired():
+    from app.core.context_builder import _TONE_MAP
+    assert "capek" in _TONE_MAP["tired"]
