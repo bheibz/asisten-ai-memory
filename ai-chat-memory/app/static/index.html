@@ -283,45 +283,19 @@ async function sendMessage(content){
     }
     if(statusDiv)statusDiv.remove();
 
-    // Split reasoning & answer
-    let reasoning='',answer=allText;
-
-    // 1. Cari marker seperti "Jadi, ", "Maka, ", "Respon:"
-    const m = allText.match(/(?:Jadi[,:]|Maka[,:]|Jawaban:|Respon:|Mulai respon\\.|Answer:|Here is my response:|Saya akan menjawab:|Ini jawaban saya:|Saya jawab:|Saya mulai jawab:|Saya merespon:|Thus,\\s*response:)/gi);
-    if(m){
-      const lastMarker = m[m.length-1];
-      const idx = allText.lastIndexOf(lastMarker);
-      reasoning = allText.slice(0, idx).trim();
-      answer = allText.slice(idx + lastMarker.length).trim();
-    }
-
-    // 2. Fallback: cari baris/sentence terakhir yg diawali greeting
-    if(!reasoning){
-      const sentences = allText.split(/(?<=[.!?])\s+/);
-      for(let i=sentences.length-1;i>=0;i--){
-        const s=sentences[i].trim().replace(/^[""'']/,'');
-        if(/^(Halo|Hai|Hi|Hello|Hey|Selamat|Sore|Pagi|Malam|Siang|Alhamdulillah|Tentu|Ya|Oke|Ok|Baik|Baiklah|Hmm|Kabar|Siap)\b/i.test(s)){
-          reasoning = sentences.slice(0,i).join(' ');
-          answer = sentences.slice(i).join(' ');
-          break;
-        }
+    // Cek apakah backend sudah kirim __STRIPPED__: (clean answer)
+    const strippedMatch = allText.match(/__STRIPPED__:([\s\S]+)$/);
+    if (strippedMatch) {
+      const answer = strippedMatch[1].trim();
+      const reasoning = allText.replace(/__STRIPPED__:.+$/s, '').trim();
+      if (reasoning && answer) {
+        assistantDiv.innerHTML = `<div style="font-size:11px;color:var(--text2);margin-bottom:2px">AI</div>
+          <details style="margin:4px 0;opacity:.55;font-size:11px">
+            <summary style="cursor:pointer;color:var(--text2);user-select:none">🤔 Proses berpikir</summary>
+            <small style="display:block;margin-top:4px;color:var(--text3);line-height:1.4">${formatContent(reasoning)}</small>
+          </details>
+          ${formatContent(answer)}`;
       }
-    }
-
-    // 3. Fallback: ambil 40% terakhir
-    if(!reasoning && allText.length > 200){
-      const cut = Math.floor(allText.length * 0.6);
-      reasoning = allText.slice(0, cut).trim();
-      answer = allText.slice(cut).trim();
-    }
-
-    if(reasoning&&reasoning.trim()&&answer.trim()&&reasoning.length<answer.length*3){
-      assistantDiv.innerHTML=`<div style="font-size:11px;color:var(--text2);margin-bottom:2px">AI</div>
-        <details style="margin:4px 0;opacity:.55;font-size:11px">
-          <summary style="cursor:pointer;color:var(--text2);user-select:none">🤔 Proses berpikir</summary>
-          <small style="display:block;margin-top:4px;color:var(--text3);line-height:1.4">${formatContent(reasoning)}</small>
-        </details>
-        ${formatContent(answer)}`;
     }
     document.getElementById('exportBtn').style.display='';
     loadConversations();

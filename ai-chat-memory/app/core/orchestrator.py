@@ -202,7 +202,44 @@ class BrainOrchestrator:
 
         clean_response = re.sub(r'__STATUS__:[^\n]*\n?|__CMD__:[^\n]*', '', full_response).strip()
 
+        import re as _re
+        txt = clean_response
 
+        # Cari marker eksplisit
+        split_at = -1
+        for m in ["Jawaban:", "Respon:", "Mulai respon.", "Jawab:", "Saya jawab:", "Saya mulai jawab:",
+                   "Answer:", "Here is my response:", "Thus, response:", "Aku akan menjawab:",
+                   "Saya akan menjawab:", "Saya akan mulai:", "Ini jawaban saya:", "Saya merespon:"]:
+            idx = txt.rfind(m)
+            if idx > split_at: split_at = idx + len(m)
+
+        # Fallback: cari kalimat terakhir yang diawali greeting
+        if split_at == -1:
+            m = _re.search(r'(?i)([.!?])\s*(Halo|Hai|Hi|Selamat|Sore|Alhamdulillah|Tentu|Ya|Oke|Ok|Baik|Kabar|Siap)\b', txt)
+            if m and m.start() > len(txt) * 0.3:
+                split_at = m.start(2)
+
+        # Fallback: baris terakhir yang bukan kata reasoning
+        if split_at == -1 and len(txt) > 200:
+            sentences = _re.split(r'(?<=[.!?])\s+', txt)
+            for i in range(len(sentences) - 1, -1, -1):
+                s = sentences[i].strip()
+                if len(s) > 15 and len(s) < 200:
+                    first_word = s.split()[0] if s.split() else ""
+                    if not _re.match(r'(The|We|I|My|This|It|To|But|So|Let|In|For|First|Second|Since|Because|However|Therefore|Thus|Note|Wait|Yes|No|Maybe|Actually|Basically)', first_word, _re.I):
+                        split_at = len(' '.join(sentences[:i])) + 1
+                        break
+
+        # Fallback: ambil 40% terakhir
+        if split_at == -1 and len(txt) > 300:
+            split_at = int(len(txt) * 0.6)
+
+        if 0 < split_at < len(txt):
+            answer = txt[split_at:].strip().lstrip('"\'!.,;:? ')
+            answer = _re.sub(r'^[^a-zA-Z0-9]+', '', answer)
+            if len(answer) > 20:
+                yield f"\n__STRIPPED__:{answer}\n"
+                clean_response = answer
 
         if cmd_result:
             clean_response += f"\n\n{cmd_result}"
