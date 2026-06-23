@@ -9,8 +9,9 @@ Fast, token-efficient AI chat app dengan 3-tier memory architecture + **9Router 
 - **💬 Chat Streaming** — REST API + WebSocket real-time via 9Router
 - **🧠 3-Tier Memory** — Working memory, Short-term summaries, Long-term vector search
 - **⚡ Token-Optimized** — Smart retrieval, model routing, compression, response cache
-- **🔀 Model Routing** — Otomatis pilih model sesuai complexity + category
+- **🔀 Smart Model Routing** — North-mini untuk chat biasa, otomatis Deepseek + web search untuk pertanyaan faktual
 - **🌐 Web Search** — Cari info real-time via DuckDuckGo (gratis, tanpa API key)
+- **🧠 Context-Aware Search** — "cek di internet" otomatis pakai konteks chat sebelumnya
 - **📝 Memory Command** — Perintah `ingat`, `lupa`, `perbaharui`, `ganti namaku/namamu` dari chat
 - **🔍 Semantic Search** — Cari memory relevan pakai cosine similarity + keyword overlap
 - **📉 Memory Decay** — Background task auto-cleanup memory yang jarang diakses
@@ -117,15 +118,22 @@ curl -X POST http://localhost:8000/api/v1/chat \
 
 Menggunakan **9Router proxy** (`http://localhost:20128/v1`) dengan model:
 
-| Complexity | Primary Model | Use Case |
-|------------|---------------|----------|
-| **simple** | `oc/north-mini-code-free` | Sapaan, thanks, pertanyaan pendek |
-| **moderate** | `oc/mimo-v2.5-free` | Percakapan umum |
-| **complex** | `oc/deepseek-v4-flash-free` | Coding, analisis, debugging |
-| **creative** | `oc/big-pickle` | Writing, essay, konten panjang |
-| **coding** | `oc/north-mini-code-free` | Pertanyaan coding (prioritas) |
+| Skenario | Model | Trigger |
+|----------|-------|--------|
+| **Chat biasa** (sapaan, ngobrol santai) | `oc/north-mini-code-free` | Tidak cocok FACTUAL_PATTERNS |
+| **Pertanyaan faktual** (siapa, apa, berapa, tanggal, berita) | `oc/deepseek-v4-flash-free` + web search | FACTUAL_PATTERNS terdeteksi |
+| **Cek internet** (cari, cek, google) | `oc/deepseek-v4-flash-free` + web search | SEARCH_PATTERNS terdeteksi |
+| **Follow-up "cek di internet"** | `oc/deepseek-v4-flash-free` + search dari konteks | Deteksi follow-up, ambil query sebelumnya |
+| **Tanggal/jam sekarang** | `oc/deepseek-v4-flash-free` + time context | CURRENT_TIME_PATTERNS |
+| **Coding** | `oc/north-mini-code-free` | CODING_PATTERNS |
 
-> **Catatan:** Model yang tersedia tergantung 9Router proxy. Semua model `oc/*` adalah reasoning model — respons akan menampilkan proses berpikir AI. Gunakan model non-reasoning seperti `gpt-4o-mini` jika API key OpenAI tersedia.
+**Cara kerja smart routing:**
+1. Query diklasifikasi (factual, search, time, casual)
+2. Kalau factual → `force_smart=True` → pake Deepseek + web search
+3. Kalau casual → North-mini (cepat, hemat)
+4. "cek internet" setelah tanya sesuatu → ambil konteks dari chat sebelumnya
+
+> **Catatan:** Model `oc/*` adalah reasoning model — respons akan menampilkan proses berpikir AI. Untuk hasil lebih bersih, bisa pakai `gpt-4o-mini` jika API key OpenAI tersedia.
 
 ---
 
@@ -305,6 +313,13 @@ tail -f /tmp/aichat.log
 ---
 
 ## 📦 Changelog
+
+### v1.2.1
+
+- **🔀 Smart routing** — North-mini untuk casual chat, Deepseek + web search untuk pertanyaan faktual
+- **🧠 Context-aware search** — "cek di internet" ambil konteks dari pesan user sebelumnya
+- **🔍 FACTUAL_PATTERNS** — Auto-detect pertanyaan faktual (siapa, apa, berapa, hijriyah, dll)
+- **⚡ force_smart** — Parameter untuk routing langsung ke deepseek tanpa north-mini
 
 ### v1.2.0
 
