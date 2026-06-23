@@ -123,10 +123,25 @@ class OpenRouterProvider:
             return []
 
 
+from app.llm.providers.openai_provider import OpenAIProvider
+from app.llm.providers.deepseek_provider import DeepSeekProvider
+
 class LLMGateway:
+
+    # Models routed to DeepSeek native (not OpenRouter)
+    DEEPSEEK_MODELS = {"deepseek-chat", "deepseek-reasoner", "deepseek-r1"}
 
     def __init__(self):
         self.provider = OpenRouterProvider()
+        self.deepseek = DeepSeekProvider()
+
+    def _use_deepseek(self, model: str) -> bool:
+        """Check if model should use DeepSeek native API."""
+        return (
+            bool(settings.deepseek_api_key)
+            and any(m in model for m in self.DEEPSEEK_MODELS)
+            and ":free" not in model  # :free models go through OpenRouter
+        )
 
     async def stream(
         self,
@@ -136,8 +151,12 @@ class LLMGateway:
         temperature: float = 0.7,
         reasoning: bool = True,
     ) -> AsyncGenerator[str, None]:
-        async for chunk in self.provider.stream(model, messages, max_tokens, temperature, reasoning=reasoning):
-            yield chunk
+        if self._use_deepseek(model):
+            async for chunk in self.deepseek.stream(model, messages, max_tokens, temperature):
+                yield chunk
+        else:
+            async for chunk in self.provider.stream(model, messages, max_tokens, temperature, reasoning=reasoning):
+                yield chunk
 
     async def complete(
         self,
@@ -147,6 +166,8 @@ class LLMGateway:
         temperature: float = 0.3,
         reasoning: bool = False,
     ) -> str:
+        if self._use_deepseek(model):
+            return await self.deepseek.complete(model, prompt, max_tokens, temperature)
         return await self.provider.complete(model, prompt, max_tokens, temperature, reasoning=reasoning)
 
     async def get_models(self) -> list[dict]:
