@@ -125,22 +125,30 @@ class OpenRouterProvider:
 
 from app.llm.providers.openai_provider import OpenAIProvider
 from app.llm.providers.deepseek_provider import DeepSeekProvider
+from app.llm.providers.cerebras_provider import CerebrasProvider
 
 class LLMGateway:
 
-    # Models routed to DeepSeek native (not OpenRouter)
+    # Models routed to native providers (not OpenRouter)
     DEEPSEEK_MODELS = {"deepseek-chat", "deepseek-reasoner", "deepseek-r1"}
+    CEREBRAS_MODELS = {"llama3.1-8b", "llama-3.3-70b", "llama3.3-70b"}
 
     def __init__(self):
         self.provider = OpenRouterProvider()
         self.deepseek = DeepSeekProvider()
+        self.cerebras = CerebrasProvider()
 
     def _use_deepseek(self, model: str) -> bool:
-        """Check if model should use DeepSeek native API."""
         return (
             bool(settings.deepseek_api_key)
             and any(m in model for m in self.DEEPSEEK_MODELS)
-            and ":free" not in model  # :free models go through OpenRouter
+            and ":free" not in model
+        )
+
+    def _use_cerebras(self, model: str) -> bool:
+        return (
+            bool(settings.cerebras_api_key)
+            and any(m in model for m in self.CEREBRAS_MODELS)
         )
 
     async def stream(
@@ -153,6 +161,9 @@ class LLMGateway:
     ) -> AsyncGenerator[str, None]:
         if self._use_deepseek(model):
             async for chunk in self.deepseek.stream(model, messages, max_tokens, temperature):
+                yield chunk
+        elif self._use_cerebras(model):
+            async for chunk in self.cerebras.stream(model, messages, max_tokens, temperature):
                 yield chunk
         else:
             async for chunk in self.provider.stream(model, messages, max_tokens, temperature, reasoning=reasoning):
@@ -168,6 +179,8 @@ class LLMGateway:
     ) -> str:
         if self._use_deepseek(model):
             return await self.deepseek.complete(model, prompt, max_tokens, temperature)
+        if self._use_cerebras(model):
+            return await self.cerebras.complete(model, prompt, max_tokens, temperature)
         return await self.provider.complete(model, prompt, max_tokens, temperature, reasoning=reasoning)
 
     async def get_models(self) -> list[dict]:
