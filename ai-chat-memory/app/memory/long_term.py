@@ -58,20 +58,24 @@ class LongTermMemory:
         await self.db.insert_fact(user_id, conv_id, fact)
 
     async def _boost_memory(self, point_id: str):
+        """Boost memory decay score on access. Non-critical — errors are silent."""
         try:
             from app.db.models import MemoryFact
             from sqlalchemy import select, update
-            async with self.db.session.begin() as session:
-                result = await session.execute(select(MemoryFact).where(MemoryFact.id == point_id))
-                fact = result.scalar_one_or_none()
-                if fact:
-                    await session.execute(
-                        update(MemoryFact).where(MemoryFact.id == point_id).values(
-                            access_count=MemoryFact.access_count + 1,
-                            last_accessed=datetime.now(),
-                            decay_score=min(1.0, fact.decay_score + 0.1),
-                        )
+            result = await self.db.session.execute(
+                select(MemoryFact).where(MemoryFact.id == point_id)
+            )
+            fact = result.scalar_one_or_none()
+            if fact:
+                await self.db.session.execute(
+                    update(MemoryFact)
+                    .where(MemoryFact.id == point_id)
+                    .values(
+                        access_count=MemoryFact.access_count + 1,
+                        last_accessed=datetime.now(),
+                        decay_score=min(1.0, fact.decay_score + 0.1),
                     )
-                    await session.commit()
+                )
+                await self.db.session.commit()
         except Exception:
             pass

@@ -12,7 +12,6 @@ from app.memory.memory_manager import MemoryManager
 from app.llm.embeddings import Embedder
 from app.db.vector_store import vector_store
 from app.llm.gateway import llm_gateway
-from app.db.database import async_session
 
 # ── Command patterns (compiled once) ──────────────────────────────────────
 
@@ -265,13 +264,10 @@ class CommandHandler:
     # ── Helpers ────────────────────────────────────────────────────────
 
     async def _ensure_user(self, user_id: str):
-        """Auto-create user if not exists."""
+        """Auto-create user if not exists. Uses the existing DB session."""
         user = await self.db.get_user(user_id)
         if not user:
             from app.db.models import User as UserModel
-            from sqlalchemy import insert
-            async with async_session() as session:
-                await session.execute(
-                    insert(UserModel).values(id=user_id, username=user_id)
-                )
-                await session.commit()
+            new_user = UserModel(id=user_id, username=user_id)
+            self.db.session.add(new_user)
+            await self.db.session.commit()

@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from typing import AsyncGenerator, Optional
 
-from app.core.query_classifier import QueryClassifier, QueryResult
+from app.core.query_classifier import QueryClassifier, ProcessedQuery as QueryResult
 from app.core.prompt_compiler import PromptCompiler
 from app.core.model_router import ModelRouter
 from app.core.command_handler import CommandHandler
@@ -152,11 +152,11 @@ class BrainOrchestrator:
         if cleaned and cleaned != full_response:
             yield f"\n__STRIPPED__:{cleaned}\n"
 
-        # 11. Post-process (async background)
-        asyncio.create_task(self._post_process(
-            user_id, conversation_id, message,
-            cleaned or full_response, query,
-        ))
+        # 11. Post-process (async background with error logging)
+        asyncio.create_task(
+            self._post_process(user_id, conversation_id, message, cleaned or full_response, query),
+            name=f"postprocess-{user_id}-{conversation_id}",
+        )
 
     # ── Web search ──────────────────────────────────────────────────────
 
@@ -212,6 +212,15 @@ class BrainOrchestrator:
 
     async def _post_process(self, user_id: str, conversation_id: str,
                              user_msg: str, ai_response: str, query):
+        """Save messages, update memory, extract facts (async background).
+        Errors are logged but never raised — this is fire-and-forget."""
+        try:
+            await self._do_post_process(user_id, conversation_id, user_msg, ai_response, query)
+        except Exception as e:
+            logger.error(f"Post-process failed for {user_id}/{conversation_id}: {e}")
+
+    async def _do_post_process(self, user_id: str, conversation_id: str,
+                                user_msg: str, ai_response: str, query):
         """Save messages, update memory, extract facts (async background)."""
         from app.db.database import async_session
         from app.db.postgres import PostgresDB
