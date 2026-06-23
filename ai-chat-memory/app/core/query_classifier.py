@@ -9,6 +9,7 @@ class ProcessedQuery:
     category: str
     needs_memory: bool
     needs_tools: bool
+    needs_search: bool
     needs_time: bool
     estimated_tokens: int
 
@@ -17,7 +18,6 @@ class QueryClassifier:
 
     SIMPLE_PATTERNS = [
         r"^(hi|hello|halo|hey|thanks|ok|oke|terima kasih)",
-        r"^(apa itu|what is|siapa|who is) \w{1,20}$",
         r"^(ya|tidak|yes|no|iya|bukan)$",
     ]
 
@@ -51,6 +51,22 @@ class QueryClassifier:
         r"rekomendasi",
     ]
 
+    FACTUAL_PATTERNS = [
+        r"^(siapa|apa|berapa|kapan|dimana|bagaimana|kenapa|mengapa)",
+        r"(berita|news|info terbaru)",
+        r"(tanggal|hari)\s+(berapa|apa|ini)",
+        r"(cuaca|weather|suhu|temperature)",
+        r"(presiden|gubernur|walikota|menteri)\s+(saat ini|sekarang|202\d)",
+        r"(populasi|jumlah penduduk|luas)",
+        r"(harga|price|rate|kurs)",
+        r"(film|buku|musik|lagu|series)\s+terbaru",
+        r"rekomendasi",
+        r"perbedaan antara",
+        r"sejarah",
+        r"pengertian",
+        r"hijriyah",
+    ]
+
     CURRENT_TIME_PATTERNS = [
         r"(tanggal|date|hari)\s+(berapa|apa|ini|sekarang|skrng|skarang)",
         r"(jam|waktu|time|pukul)\s+(berapa|sekarang|skrng|skarang)",
@@ -67,7 +83,11 @@ class QueryClassifier:
         category = self._detect_category(msg_lower)
         needs_memory = any(t in msg_lower for t in self.MEMORY_TRIGGERS)
         needs_tools = any(re.search(p, msg_lower) for p in self.SEARCH_PATTERNS)
+        needs_search = needs_tools or any(re.search(p, msg_lower) for p in self.FACTUAL_PATTERNS)
         needs_time = any(re.search(p, msg_lower) for p in self.CURRENT_TIME_PATTERNS)
+
+        if needs_search and complexity == "simple":
+            complexity = "moderate"
 
         return ProcessedQuery(
             original=message,
@@ -75,6 +95,7 @@ class QueryClassifier:
             category=category,
             needs_memory=needs_memory,
             needs_tools=needs_tools,
+            needs_search=needs_search,
             needs_time=needs_time,
             estimated_tokens=int(word_count * 1.5),
         )

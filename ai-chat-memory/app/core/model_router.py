@@ -23,7 +23,9 @@ class ModelRouter:
         },
     }
 
-    def select_model(self, complexity: str, category: str, token_budget: int = 10000) -> str:
+    def select_model(self, complexity: str, category: str, token_budget: int = 10000, force_smart: bool = False) -> str:
+        if force_smart:
+            return "oc/deepseek-v4-flash-free"
         if token_budget < 1000:
             return "oc/north-mini-code-free"
         if category == "coding":

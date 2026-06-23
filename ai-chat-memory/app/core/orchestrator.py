@@ -28,6 +28,12 @@ class BrainOrchestrator:
         self.prompt_compiler = PromptCompiler()
         self.router = ModelRouter()
 
+    def _get_last_user_msg(self, working_mem: list) -> str:
+        for m in reversed(working_mem):
+            if m.get("role") == "user":
+                return m.get("content", "")
+        return ""
+
     async def process_message(
         self,
         user_id: str,
@@ -54,10 +60,22 @@ class BrainOrchestrator:
             self.memory.get_user_profile(user_id),
         )
 
+        force_smart = query.needs_search or query.needs_time
         web_results = []
-        if query.needs_tools:
+        search_query = message
+        msg_lower = message.lower().strip()
+        is_cek = bool(re.search(r"cek (di|ke)\s+(internet|online|web|google)", msg_lower))
+        is_followup = any(w in msg_lower for w in ["itu", "dia", "nya", "lagi", "tadi", "sekarang", "kembali", "lagi"])
+
+        if is_followup or is_cek:
+            last_msg = self._get_last_user_msg(working_mem)
+            if last_msg:
+                search_query = last_msg
+                force_smart = True
+
+        if force_smart:
             yield "\n__STATUS__:🌐 Mencari di web...\n"
-            web_results = await web_search.search(message, max_results=5)
+            web_results = await web_search.search(search_query, max_results=5)
 
         yield "\n__STATUS__:💭 Menulis respons...\n"
 
@@ -71,14 +89,19 @@ class BrainOrchestrator:
             time_context = f"\n[CURRENT DATE] Sekarang hari {days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year}, jam {now.hour:02d}:{now.minute:02d} WIB."
 
         custom_name = user_profile.get("ai_name") if user_profile else None
+        system_ctx = self._get_system_prompt(query.category) + time_context
+        if web_results:
+            from app.tools.web_search import web_search as ws
+            web_text = ws.format_for_prompt(web_results, search_query)
+            system_ctx += f"\n\n{web_text}"
+
         compiled_prompt = self.prompt_compiler.compile(
-            system_context=self._get_system_prompt(query.category) + time_context,
+            system_context=system_ctx,
             user_profile=user_profile,
             relevant_memories=relevant_mem,
             recent_messages=working_mem,
             current_message=message,
             max_context_tokens=self._get_max_context(query.complexity),
-            web_results=web_results,
             ai_name=custom_name,
         )
 
@@ -86,9 +109,9 @@ class BrainOrchestrator:
             complexity=query.complexity,
             category=query.category,
             token_budget=10000,
+            force_smart=force_smart,
         )
 
-        import re as _re
         full_response = ""
         async for chunk in llm_gateway.stream(
             model=model,
@@ -98,48 +121,47 @@ class BrainOrchestrator:
             full_response += chunk
             yield chunk
 
-        clean_response = _re.sub(r'__STATUS__:[^\n]*\n?', '', full_response).strip()
+        clean_response = re.sub(r'__STATUS__:[^\n]*\n?', '', full_response).strip()
         asyncio.create_task(
             self._post_process(user_id, conversation_id, message, clean_response, query)
         )
 
     async def _handle_memory_command(self, user_id: str, message: str) -> str | None:
         msg_lower = message.lower().strip()
-
         for cmd, pattern in MEMORY_COMMANDS.items():
             match = re.match(pattern, msg_lower)
             if not match:
                 continue
-
             from app.db.database import async_session
             from app.db.postgres import PostgresDB
             from app.llm.embeddings import Embedder
-
             content = match.group(1).strip()
             if not content:
                 continue
-
             async with async_session() as session:
                 db = PostgresDB(session)
                 embedder = Embedder()
                 memory = MemoryManager(db, embedder)
-
                 user = await db.get_user(user_id)
                 if not user:
                     from app.db.models import User as UserModel
                     from sqlalchemy import insert
                     await session.execute(insert(UserModel).values(id=user_id, username=user_id))
                     await session.commit()
-                    user = await db.get_user(user_id)
-
-                if cmd == "ingat":
+                if cmd == "ganti_namamu":
+                    profile = await db.get_user_profile(user_id)
+                    profile["ai_name"] = content
+                    await db.update_user_profile(user_id, profile)
+                    return f"✅ Oke, panggil aku *{content}* mulai sekarang!"
+                elif cmd == "ganti_namaku":
+                    profile = await db.get_user_profile(user_id)
+                    profile["name"] = content
+                    await db.update_user_profile(user_id, profile)
+                    return f"✅ Senang kenal, *{content}*! Aku akan ingat namamu."
+                elif cmd == "ingat":
                     words = content.split()
                     skip = {"aku", "saya", "my", "i", "gue", "gw", "kami", "kita"}
-                    key = "catatan"
-                    if len(words) >= 2:
-                        key = words[1] if words[0] in skip else words[0]
-                    elif len(words) == 1:
-                        key = words[0]
+                    key = words[1] if len(words) >= 2 and words[0] in skip else words[0] if words else "catatan"
                     val = content
                     existing = await db.find_fact(user_id, "personal", key)
                     if existing:
@@ -156,11 +178,10 @@ class BrainOrchestrator:
                         fact = {"type": "personal", "key": key, "value": val}
                         await memory.long_term.store_fact(user_id, None, fact)
                         return f"✅ Disimpan! {key}: *{val}*"
-
                 elif cmd == "update":
                     existing = await db.get_user_facts(user_id)
                     if not existing:
-                        return f"📭 Belum ada memory untuk diperbaharui."
+                        return "📭 Belum ada memory untuk diperbaharui."
                     for f in existing:
                         if content.lower() in f.fact_key.lower() or content.lower() in f.fact_value.lower():
                             val = content.split("menjadi")[-1].strip() if "menjadi" in content else content
@@ -174,19 +195,6 @@ class BrainOrchestrator:
                             })
                             return f"✅ Memory diperbaharui: *{f.fact_key}: {val}*"
                     return f"🔍 Tidak nemu memory tentang *{content}*"
-
-                elif cmd == "ganti_namamu":
-                    profile = await db.get_user_profile(user_id)
-                    profile["ai_name"] = content
-                    await db.update_user_profile(user_id, profile)
-                    return f"✅ Oke, panggil aku *{content}* mulai sekarang!"
-
-                elif cmd == "ganti_namaku":
-                    profile = await db.get_user_profile(user_id)
-                    profile["name"] = content
-                    await db.update_user_profile(user_id, profile)
-                    return f"✅ Senang kenal, *{content}*! Aku akan ingat namamu."
-
                 elif cmd == "lupa":
                     facts = await db.get_user_facts(user_id)
                     for f in facts:
@@ -196,7 +204,6 @@ class BrainOrchestrator:
                             await vector_store.delete(f.id)
                             return f"🗑️ Dihapus! {f.fact_key}: *{f.fact_value}*"
                     return f"🔍 Tidak nemu memory tentang *{content}*"
-
         return None
 
     async def _post_process(self, user_id: str, conversation_id: str, user_msg: str, ai_response: str, query):
@@ -208,7 +215,6 @@ class BrainOrchestrator:
             db = PostgresDB(session)
             conv = await db.get_conversation(conversation_id)
             if not conv:
-                from app.utils.helpers import generate_id
                 cid = conversation_id
                 c = ConvModel(id=cid, user_id=user_id, category=query.category)
                 c.title = (user_msg[:60] + "..") if len(user_msg) > 60 else user_msg[:60]
