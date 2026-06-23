@@ -16,81 +16,16 @@ logger = logging.getLogger(__name__)
 # All models end in :free (OpenRouter free tier).
 
 MODEL_POOLS: dict[str, list[str]] = {
-    # Priority: Cerebras (ultra-fast, free) → DeepSeek → OpenRouter free fallbacks.
-    # llama3.1-8b / llama-3.3-70b use Cerebras native API when key is set.
-    # deepseek-chat / deepseek-reasoner use DeepSeek native API when key is set.
-    "simple": [
-        "llama3.1-8b",
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemma-3-27b-it:free",
-        "cognitivecomputations/dolphin3.0-mistral-24b:free",
-    ],
-    "moderate": [
-        "llama-3.3-70b",
-        "llama3.1-8b",
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemma-3-27b-it:free",
-    ],
-    "complex": [
-        "llama-3.3-70b",
-        "deepseek-reasoner",
-        "deepseek-chat",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "cognitivecomputations/dolphin3.0-mistral-24b:free",
-        "google/gemma-3-27b-it:free",
-    ],
-    "creative": [
-        "llama-3.3-70b",
-        "llama3.1-8b",
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "cognitivecomputations/dolphin3.0-mistral-24b:free",
-    ],
-    "coding": [
-        "llama3.1-8b",
-        "deepseek-chat",
-        "qwen/qwen3-coder:free",
-        "deepseek-reasoner",
-        "cohere/north-mini-code:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-    ],
-    "writing": [
-        "llama-3.3-70b",
-        "llama3.1-8b",
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "cognitivecomputations/dolphin3.0-mistral-24b:free",
-    ],
-    "research": [
-        "llama-3.3-70b",
-        "deepseek-reasoner",
-        "deepseek-chat",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "cognitivecomputations/dolphin3.0-mistral-24b:free",
-        "google/gemma-3-27b-it:free",
-    ],
-    "casual": [
-        "llama3.1-8b",
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "google/gemma-3-27b-it:free",
-        "cognitivecomputations/dolphin3.0-mistral-24b:free",
-    ],
+    # Verified working models (tested June 2026).
+    # Cerebras/DeepSeek = native API when key set.
+    "simple": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
+    "moderate": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
+    "complex": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
+    "creative": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
+    "coding": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
+    "writing": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
+    "research": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
+    "casual": ['llama3.1-8b', 'deepseek-chat', 'qwen/qwen3-next-80b-a3b-instruct:free', 'meta-llama/llama-3.3-70b-instruct:free', 'qwen/qwen-2.5-72b-instruct:free', 'cohere/north-mini-code:free'],
 }
 
 # ── Backoff config ──────────────────────────────────────────────────────

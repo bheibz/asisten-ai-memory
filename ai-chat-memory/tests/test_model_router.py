@@ -28,4 +28,4 @@ async def test_select_model_creative():
 async def test_select_model_force_smart():
     router = ModelRouter()
     model = await router.select_model(complexity="simple", category="casual", force_smart=True)
-    assert model == "deepseek-reasoner"
+    assert model == "llama3.1-8b"
