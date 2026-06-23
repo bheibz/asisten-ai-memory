@@ -87,7 +87,7 @@ pre code{background:none;padding:0}
   <div style="padding:4px 10px 0"><button class="btn-icon" onclick="newConversation()" style="width:100%">+ Baru</button></div>
   <div class="conv-list" id="convList"></div>
   <div style="padding:8px 10px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);text-align:center">
-    User: <span id="userIdDisplay">u1</span>
+    👤 <span id="userIdDisplay">u1</span>
   </div>
 </div>
 
@@ -360,8 +360,19 @@ async function checkReminders(){
   }catch(e){}
 }
 
+async function loadUserProfile(){
+  try{
+    const res=await api('GET',`/api/v1/users/${userId}`);
+    const data=await res.json();
+    if(data && data.profile && data.profile.name){
+      document.getElementById('userIdDisplay').textContent=data.profile.name;
+    }
+  }catch(e){}
+}
+
 loadConversations();
 checkReminders();
+loadUserProfile();
 </script>
 </body>
 </html>
