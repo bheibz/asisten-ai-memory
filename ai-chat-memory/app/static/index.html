@@ -299,6 +299,7 @@ async function sendMessage(content){
     }
     document.getElementById('exportBtn').style.display='';
     loadConversations();
+    loadUserProfile();
   }catch(e){
     if(e.name!=='AbortError'){
       document.getElementById('typing').style.display='none';
