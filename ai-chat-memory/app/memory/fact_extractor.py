@@ -30,7 +30,7 @@ class FactExtractor:
             f"Text: {text[:500]}"
         )
         try:
-            result = await llm_gateway.complete(model="oc/north-mini-code-free", prompt=prompt, max_tokens=150)
+            result = await llm_gateway.complete(model="google/gemini-2.0-flash-exp:free", prompt=prompt, max_tokens=150)
             return self._parse(result)
         except Exception:
             return []

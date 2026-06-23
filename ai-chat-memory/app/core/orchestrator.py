@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from typing import AsyncGenerator
 
@@ -9,6 +10,8 @@ from app.memory.memory_manager import MemoryManager
 from app.llm.gateway import llm_gateway
 from app.db.redis_client import redis_client
 from app.tools.web_search import web_search
+
+logger = logging.getLogger(__name__)
 
 MEMORY_COMMANDS = {
     "ganti_namamu": r"(?:aku\s+)?(?:ganti|ubah|set|panggil)\s+(?:(?:nama\s+)?kamu|namamu)\s+(?:menjadi|jadi|:)?\s*([a-zA-Z0-9_]+)",
@@ -37,7 +40,8 @@ class BrainOrchestrator:
         self.memory = memory_manager
         self.classifier = QueryClassifier()
         self.prompt_compiler = PromptCompiler()
-        self.router = ModelRouter()
+        self.router = ModelRouter(llm_gateway=llm_gateway)
+        self.model_override = None
 
     def _get_last_user_msg(self, working_mem: list) -> str:
         for m in reversed(working_mem):
@@ -223,13 +227,35 @@ class BrainOrchestrator:
             ai_name=custom_name,
         )
 
-        model = "oc/deepseek-v4-flash-free"
+        model = self.model_override or await self.router.select_model(complexity=query.complexity, category=query.category)
+        tier = self.router.MODEL_TIERS.get(query.category or query.complexity or "simple", self.router.MODEL_TIERS["simple"])
+        fallback_model = tier.get("fallback", model)
+        attempts = [model]
+        if fallback_model and fallback_model != model:
+            attempts.append(fallback_model)
 
         full_response = ""
-        async for chunk in llm_gateway.stream(model=model, messages=compiled_prompt,
-                                              max_tokens=self._get_max_output(query.complexity)):
-            full_response += chunk
-            yield chunk
+        last_error = None
+        for attempt_model in attempts:
+            try:
+                async for chunk in llm_gateway.stream(model=attempt_model, messages=compiled_prompt,
+                                                      max_tokens=self._get_max_output(query.complexity)):
+                    full_response += chunk
+                    yield chunk
+                last_error = None
+                break
+            except Exception as stream_err:
+                last_error = stream_err
+                logger.error(f"Streaming error with {attempt_model}: {stream_err}")
+                if attempt_model == fallback_model:
+                    break
+                continue
+
+        if last_error:
+            if not full_response:
+                yield f"\n❌ Terjadi kesalahan saat memproses: {last_error}\n"
+            else:
+                yield f"\n\n_(Streaming terputus: {last_error})_"
 
         cmds = re.findall(r'__CMD__:(\w+?):(.+)', full_response)
         cmd_result = None
@@ -241,13 +267,33 @@ class BrainOrchestrator:
         import re as _re
         txt = clean_response
 
-        # Cari marker eksplisit
         split_at = -1
+
+        # 1. Cari marker eksplisit
         for m in ["Jawaban:", "Respon:", "Mulai respon.", "Jawab:", "Saya jawab:", "Saya mulai jawab:",
                    "Answer:", "Here is my response:", "Thus, response:", "Aku akan menjawab:",
-                   "Saya akan menjawab:", "Saya akan mulai:", "Ini jawaban saya:", "Saya merespon:"]:
+                   "Saya akan menjawab:", "Saya akan mulai:", "Ini jawaban saya:", "Saya merespon:",
+                   "Final answer:", "Result:", "Hasil:", "Conclusion:", "Kesimpulan:"]:
             idx = txt.rfind(m)
             if idx > split_at: split_at = idx + len(m)
+
+        # 2. Cari pola "N.**" atau "N." yang merupakan awal jawaban
+        if split_at == -1:
+            m = _re.search(r'5\.\s+\*\*', txt)
+            if m: split_at = m.start()
+            if split_at == -1:
+                m = _re.search(r'\d+\.\s+\*\*[A-Z]', txt)
+                if m: split_at = m.start()
+
+        # 3. Cari kalimat non-reasoning terakhir
+        if split_at == -1 and len(txt) > 100:
+            m = _re.search(r'(Cireng|Cara|Resep|Tips|Fungsi|Pengertian|Definisi|Contoh|Manfaat|Langkah)\b', txt)
+            if m:
+                lines = txt.split('\n')
+                for i in range(len(lines) - 1, -1, -1):
+                    if _re.search(r'(Cireng|Cara|Resep|Tips|Fungsi|Pengertian|Definisi|Contoh|Manfaat|Langkah)', lines[i]):
+                        split_at = '\n'.join(lines[:i]).__len__() + 1 if i > 1 else -1
+                        break
 
         # Fallback: cari kalimat terakhir yang diawali greeting
         if split_at == -1:
@@ -383,7 +429,7 @@ class BrainOrchestrator:
                     tags = []
                     try:
                         tag_prompt = f"Extract 1-3 tags from this text. Return ONLY comma-separated words. Text: {title}"
-                        tag_result = await llm_gateway.complete(model="oc/north-mini-code-free", prompt=tag_prompt, max_tokens=30)
+                        tag_result = await llm_gateway.complete(model="google/gemini-2.0-flash-exp:free", prompt=tag_prompt, max_tokens=30)
                         tags = [t.strip().lower() for t in tag_result.split(",") if t.strip() and len(t.strip()) < 20]
                     except Exception:
                         pass

@@ -7,6 +7,8 @@ from app.db.postgres import PostgresDB, get_session
 from app.llm.embeddings import Embedder
 from app.memory.memory_manager import MemoryManager
 from app.core.orchestrator import BrainOrchestrator
+from app.core.model_router import ModelRouter
+from app.llm.gateway import llm_gateway
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
@@ -15,6 +17,7 @@ class ChatRequest(BaseModel):
     user_id: str
     conversation_id: str
     message: str
+    model: str = "openrouter/free"
 
 
 def make_orchestrator(db: PostgresDB):
@@ -22,11 +25,69 @@ def make_orchestrator(db: PostgresDB):
     return BrainOrchestrator(MemoryManager(db, embedder))
 
 
+def _categorize_model(model: dict) -> str:
+    model_id = model.get("id", "").lower()
+    modality = model.get("architecture", {}).get("modality", "").lower()
+    supported = [p.lower() for p in model.get("supported_parameters", [])]
+    
+    # Image/Vision models
+    if "image" in modality or "vision" in model_id or "gemini" in model_id and "flash" in model_id:
+        return "🖼️ Image"
+    
+    # Coding models
+    if any(kw in model_id for kw in ["coder", "code", "qwen3-coder", "deepseek", "programming"]):
+        return "💻 Coding"
+    
+    # Reasoning models
+    if "reasoning" in supported or "include_reasoning" in supported or "reasoning" in model_id:
+        return "🧠 Reasoning"
+    
+    # Multimodal
+    if "video" in modality or "audio" in modality:
+        return "🎬 Multimodal"
+    
+    # Default: Chat
+    return "💬 Chat"
+
+
+@router.get("/models")
+async def list_models():
+    router = ModelRouter(llm_gateway=llm_gateway)
+    models = await router.get_models()
+    
+    categorized = {}
+    free_models = []
+    
+    for m in models:
+        model_id = m.get("id", "")
+        is_free = model_id.endswith(":free")
+        if is_free:
+            free_models.append(model_id)
+        
+        category = _categorize_model(m)
+        if category not in categorized:
+            categorized[category] = []
+        categorized[category].append({
+            "id": model_id,
+            "name": m.get("name", model_id),
+            "free": is_free,
+        })
+    
+    return {
+        "models": models,
+        "categorized": categorized,
+        "free_models": free_models,
+        "default": "openrouter/free",
+    }
+
+
 @router.post("/chat")
 async def chat(request: ChatRequest):
     async with async_session() as session:
         db = PostgresDB(session)
         orchestrator = make_orchestrator(db)
+        if request.model and request.model != "openrouter/free":
+            orchestrator.model_override = request.model
         return StreamingResponse(
             orchestrator.process_message(
                 user_id=request.user_id,

@@ -13,14 +13,14 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
 
-    nine_router_base_url: str = "http://localhost:20128/v1"
-    nine_router_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_api_key: str = ""
 
     ai_name: str = "Clara"
 
     max_working_memory_messages: int = 10
     working_memory_ttl: int = 1800
-    default_model: str = "oc/deepseek-v4-flash-free"
+    default_model: str = "qwen/qwen3-next-80b-a3b-instruct:free"
     embedding_model: str = "text-embedding-ada-002"
 
     class Config:

@@ -257,7 +257,7 @@ class PostgresDB:
         kb = result.scalar_one_or_none()
         if kb:
             await self.session.execute(
-                update(KnowledgeBase).where(KnowledgeBase.id == kb_id).values(is_pinned=~kb.is_pinned)
+                update(KnowledgeBase).where(KnowledgeBase.id == kb_id).values(is_pinned=not kb.is_pinned)
             )
             await self.session.commit()
 

@@ -1,5 +1,7 @@
 import hashlib
-from openai import AsyncOpenAI
+import json
+
+import httpx
 
 from app.config import settings
 
@@ -7,35 +9,41 @@ from app.config import settings
 class Embedder:
 
     def __init__(self):
-        self.client = AsyncOpenAI(
-            api_key=settings.nine_router_api_key or settings.openai_api_key or "sk-placeholder",
-            base_url=settings.nine_router_base_url if settings.nine_router_api_key else None,
-        )
+        self.base_url = settings.openrouter_base_url.rstrip("/")
+        self.api_key = settings.openrouter_api_key or settings.openai_api_key or "sk-placeholder"
         self.model = settings.embedding_model
 
     async def embed(self, text: str) -> list[float]:
-        if not settings.openai_api_key and not settings.nine_router_api_key:
+        if not settings.openai_api_key and not settings.openrouter_api_key:
             return self._fake_embed(text)
         try:
-            response = await self.client.embeddings.create(
-                model=self.model,
-                input=text,
-            )
-            return response.data[0].embedding
+            return await self._embed([text])
         except Exception:
             return self._fake_embed(text)
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        if not settings.openai_api_key and not settings.nine_router_api_key:
+        if not settings.openai_api_key and not settings.openrouter_api_key:
             return [self._fake_embed(t) for t in texts]
         try:
-            response = await self.client.embeddings.create(
-                model=self.model,
-                input=texts,
-            )
-            return [d.embedding for d in response.data]
+            return await self._embed(texts)
         except Exception:
             return [self._fake_embed(t) for t in texts]
+
+    async def _embed(self, texts: list[str]) -> list[list[float]]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {"model": self.model, "input": texts}
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{self.base_url}/embeddings",
+                headers=headers,
+                content=json.dumps(payload),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            return [d["embedding"] for d in data.get("data", [])]
 
     def _fake_embed(self, text: str) -> list[float]:
         h = hashlib.md5(text.encode()).digest()

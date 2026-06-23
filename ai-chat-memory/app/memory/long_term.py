@@ -61,7 +61,7 @@ class LongTermMemory:
         try:
             from app.db.models import MemoryFact
             from sqlalchemy import select, update
-            async with self.db.session as session:
+            async with self.db.session.begin() as session:
                 result = await session.execute(select(MemoryFact).where(MemoryFact.id == point_id))
                 fact = result.scalar_one_or_none()
                 if fact:

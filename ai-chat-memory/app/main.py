@@ -1,3 +1,4 @@
+import os
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -32,8 +33,8 @@ async def decay_loop():
                 db = PostgresDB(session)
                 engine = DecayEngine(db)
                 await engine.run_cycle()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Decay loop error: {e}")
         await asyncio.sleep(86400)
 
 
@@ -64,7 +65,8 @@ app.include_router(user_router)
 app.include_router(knowledge_router)
 app.include_router(reminder_router)
 
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+static_path = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 
 @app.get("/")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.db.postgres import PostgresDB, get_session
 
@@ -15,5 +15,5 @@ async def create_user(username: str, email: str = None, db: PostgresDB = Depends
 async def get_user(user_id: str, db: PostgresDB = Depends(get_session)):
     user = await db.get_user(user_id)
     if not user:
-        return {"error": "User not found"}, 404
+        raise HTTPException(status_code=404, detail="User not found")
     return {"id": str(user.id), "username": user.username, "profile": user.user_profile, "preferred_ai_name": user.preferred_ai_name}

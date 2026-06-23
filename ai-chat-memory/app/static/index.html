@@ -96,6 +96,10 @@ pre code{background:none;padding:0}
 <div class="main">
   <div class="header">
     <h1 id="convTitle">Percakapan Baru</h1>
+    <span id="modelBadge" style="font-size:11px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:12px;margin-left:8px">⟳ loading...</span>
+    <select id="modelSelect" style="padding:6px 8px;border-radius:6px;border:1px solid #444;background:#1e1e1e;color:#fff;font-size:12px;max-width:160px" title="Pilih Model">
+      <option value="openrouter/free">🆓 openrouter/free</option>
+    </select>
     <div class="header-actions">
       <button class="btn-icon" id="exportBtn" onclick="exportChat()" title="Export">📥</button>
       <button class="btn-icon" id="cancelBtn" onclick="cancelStream()" title="Stop" style="display:none">⏹</button>
@@ -246,6 +250,52 @@ function cancelStream(){
   document.getElementById('sendBtn').disabled=false;
 }
 
+
+async function loadModels(){
+  try{
+    const res=await api("GET","/api/v1/models");
+    const data=await res.json();
+    const sel=document.getElementById("modelSelect");
+    sel.innerHTML="";
+    const categorized=data.categorized||{};
+    const free=data.free_models||[];
+    
+    // Add default option
+    const defaultOpt=document.createElement("option");
+    defaultOpt.value=data.default||"openrouter/free";
+    defaultOpt.textContent="🆓 openrouter/free (auto)";
+    sel.appendChild(defaultOpt);
+    
+    // Sort categories
+    const cats=Object.keys(categorized).sort();
+    cats.forEach(cat=>{
+      const group=document.createElement("optgroup");
+      group.label=cat;
+      categorized[cat].forEach(m=>{
+        const opt=document.createElement("option");
+        opt.value=m.id;
+        const isFree=m.free||free.includes(m.id);
+        opt.textContent=(isFree?"✅ ":"🔒 ")+(m.name||m.id);
+        if(isFree)opt.style.color="#4ade80";
+        group.appendChild(opt);
+      });
+      sel.appendChild(group);
+    });
+    
+    sel.value=data.default||"openrouter/free";
+    sel.onchange=()=>updateModelBadge(sel.value);
+    updateModelBadge(sel.value);
+  }catch(e){console.error("Gagal load models:",e);}
+}
+
+function updateModelBadge(modelId){
+  const badge=document.getElementById("modelBadge");
+  if(!badge)return;
+  const short=modelId.includes(":free")?modelId.replace(":free",""):modelId;
+  badge.textContent="🤖 "+short;
+  badge.style.color=modelId.includes(":free")?"#4ade80":"var(--text3)";
+}
+
 async function sendMessage(content){
   const input=document.getElementById('messageInput');
   const btn=document.getElementById('sendBtn');
@@ -262,7 +312,7 @@ async function sendMessage(content){
   try{
     const res=await fetch(API+'/api/v1/chat',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({user_id:userId,conversation_id:currentConv,message:msg}),
+      body:JSON.stringify({user_id:userId,conversation_id:currentConv,message:msg,model:document.getElementById('modelSelect').value}),
       signal:abortCtrl.signal,
     });
     document.getElementById('typing').style.display='none';
@@ -291,6 +341,18 @@ async function sendMessage(content){
       document.getElementById('chatArea').scrollTop=document.getElementById('chatArea').scrollHeight;
     }
     if(statusDiv)statusDiv.remove();
+
+    // Check for rate limit error and auto retry
+    if(allText.includes("retry shortly") || allText.includes("rate limit") || allText.includes("Please retry") || allText.includes("add your own key")){
+      console.warn("Rate limit detected, refreshing models and showing error");
+      loadModels();
+      assistantDiv.innerHTML=`<div style="font-size:11px;color:var(--text2);margin-bottom:2px">AI</div>
+        <div style="color:#facc15;padding:10px;background:rgba(250,204,21,.1);border-radius:8px">
+          ⚠️ Model <b>${document.getElementById('modelSelect').value}</b> rate-limited. Coba pilih model lain di dropdown, atau tunggu sebentar.
+        </div>`;
+      btn.disabled=false;
+      return;
+    }
 
     // Cek apakah backend sudah kirim __STRIPPED__: (clean answer)
     const strippedMatch = allText.match(/__STRIPPED__:([\s\S]+)$/);
@@ -431,6 +493,7 @@ async function loadUserProfile(){
 }
 
 loadConversations();
+loadModels();
 checkReminders();
 loadUserProfile();
 </script>
