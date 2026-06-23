@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import select, func, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Conversation, MemoryFact, Message, SessionSummary, User
+from app.db.models import Conversation, MemoryFact, Message, Reminder, SessionSummary, User
 from app.db.database import async_session
 
 
@@ -162,3 +162,44 @@ class PostgresDB:
     async def archive_fact(self, fact_id: str):
         await self.session.execute(delete(MemoryFact).where(MemoryFact.id == fact_id))
         await self.session.commit()
+
+    async def create_reminder(self, user_id: str, message: str, remind_at: datetime) -> Reminder:
+        r = Reminder(user_id=user_id, message=message, remind_at=remind_at)
+        self.session.add(r)
+        await self.session.commit()
+        await self.session.refresh(r)
+        return r
+
+    async def get_reminders_today(self, user_id: str):
+        from datetime import date
+        today = date.today()
+        result = await self.session.execute(
+            select(Reminder).where(
+                Reminder.user_id == user_id,
+                Reminder.remind_at >= today,
+                Reminder.remind_at < today.replace(day=today.day + 1),
+                Reminder.is_shown == False,
+            ).order_by(Reminder.remind_at)
+        )
+        return result.scalars().all()
+
+    async def mark_reminder_shown(self, reminder_id: str):
+        await self.session.execute(
+            update(Reminder).where(Reminder.id == reminder_id).values(is_shown=True)
+        )
+        await self.session.commit()
+
+    async def delete_reminder(self, reminder_id: str):
+        await self.session.execute(delete(Reminder).where(Reminder.id == reminder_id))
+        await self.session.commit()
+
+    async def vote_message(self, msg_id: str, vote: str):
+        result = await self.session.execute(select(Message).where(Message.id == msg_id))
+        msg = result.scalar_one_or_none()
+        if msg:
+            extra = dict(msg.extra or {})
+            extra["vote"] = vote
+            await self.session.execute(
+                update(Message).where(Message.id == msg_id).values(extra=extra)
+            )
+            await self.session.commit()

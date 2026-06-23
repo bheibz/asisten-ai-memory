@@ -15,6 +15,7 @@ from app.memory.decay_engine import DecayEngine
 from app.api.routes_chat import router as chat_router
 from app.api.routes_memory import router as memory_router
 from app.api.routes_user import router as user_router
+from app.api.routes_reminder import router as reminder_router
 from app.api.middleware import logging_middleware
 from app.utils.logger import setup_logger
 
@@ -59,6 +60,7 @@ app.middleware("http")(logging_middleware)
 app.include_router(chat_router)
 app.include_router(memory_router)
 app.include_router(user_router)
+app.include_router(reminder_router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

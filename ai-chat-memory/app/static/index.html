@@ -36,15 +36,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .empty-state h3{font-size:18px;color:var(--text2)}
 .msg{max-width:80%;padding:10px 14px;border-radius:10px;line-height:1.5;font-size:14px;animation:fadeIn .3s;position:relative}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.msg.user{align-self:flex-end;background:var(--user-msg);color:#fff;border-bottom-right-radius:4px}
+.msg.user{align-self:flex-end;background:var(--user-msg);color:#fff;border-bottom-right-radius:4px;cursor:pointer}
+.msg.user:hover{opacity:.9}
 .msg.assistant{align-self:flex-start;background:var(--surface2);border:1px solid var(--border);border-bottom-left-radius:4px}
 .msg.system{align-self:center;color:var(--text3);font-size:12px;background:none;border:none}
 .msg .time{font-size:10px;color:var(--text3);margin-top:4px;opacity:.7}
 .msg.user .time{color:rgba(255,255,255,.6)}
 .msg-actions{position:absolute;top:-22px;right:0;display:none;gap:4px}
-.msg:hover .msg-actions{display:flex}
-.msg-actions button{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 6px;font-size:11px}
+.msg.assistant:hover .msg-actions{display:flex}
+.msg.user:hover .msg-actions{display:flex}
+.msg-actions button{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text2);cursor:pointer;padding:2px 6px;font-size:11px;transition:all .2s}
 .msg-actions button:hover{color:var(--accent)}
+.msg-actions .vote-up:hover{color:#22c55e}
+.msg-actions .vote-down:hover{color:#ef4444}
 .input-area{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px}
 .input-area input{flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:14px;outline:none;transition:border .2s}
 .input-area input:focus{border-color:var(--accent)}
@@ -74,20 +78,16 @@ pre code{background:none;padding:0}
 </head>
 <body>
 
-<div class="sidebar" id="sidebar">
+<div class="sidebar">
   <div class="sidebar-header">
     <h2>Percakapan</h2>
     <button class="btn-icon" onclick="toggleTheme()" title="Tema">🌓</button>
   </div>
-  <div class="sidebar-search">
-    <input id="searchConv" placeholder="Cari percakapan..." oninput="filterConversations()">
-  </div>
-  <div style="padding:4px 10px 0">
-    <button class="btn-icon" onclick="newConversation()" style="width:100%;text-align:center">+ Baru</button>
-  </div>
+  <div class="sidebar-search"><input id="searchConv" placeholder="Cari..." oninput="filterConversations()"></div>
+  <div style="padding:4px 10px 0"><button class="btn-icon" onclick="newConversation()" style="width:100%">+ Baru</button></div>
   <div class="conv-list" id="convList"></div>
   <div style="padding:8px 10px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);text-align:center">
-    User: <span id="userIdDisplay">user1</span>
+    User: <span id="userIdDisplay">u1</span>
   </div>
 </div>
 
@@ -95,278 +95,258 @@ pre code{background:none;padding:0}
   <div class="header">
     <h1 id="convTitle">Percakapan Baru</h1>
     <div class="header-actions">
-      <button class="btn-icon" id="exportBtn" onclick="exportChat()" title="Export chat">📥</button>
+      <button class="btn-icon" id="exportBtn" onclick="exportChat()" title="Export">📥</button>
       <button class="btn-icon" id="cancelBtn" onclick="cancelStream()" title="Stop" style="display:none">⏹</button>
     </div>
   </div>
-
   <div class="chat-area" id="chatArea">
-    <div class="empty-state" id="emptyState">
-      <h3>💬 AI Chat</h3>
-      <p>Ketik pesan untuk memulai</p>
-    </div>
+    <div class="empty-state" id="emptyState"><h3>💬 AI Chat</h3><p>Ketik pesan untuk memulai</p></div>
   </div>
-
-  <div class="typing" id="typing">
-    <span></span><span></span><span></span>
-  </div>
-
+  <div class="typing" id="typing"><span></span><span></span><span></span></div>
   <div class="input-area">
-    <input type="text" id="messageInput" placeholder="Ketik pesan..." autofocus
-      onkeydown="if(event.key==='Enter') sendMessage()">
+    <input type="text" id="messageInput" placeholder="Ketik pesan..." autofocus onkeydown="if(event.key==='Enter') sendMessage()">
     <button id="sendBtn" onclick="sendMessage()">Kirim</button>
   </div>
 </div>
 
 <div class="modal-overlay" id="memoryModal">
   <div class="modal">
-    <div class="modal-h">
-      <h3>🧠 Yang AI Ingat</h3>
-      <button class="modal-close" onclick="closeModal('memoryModal')">&times;</button>
-    </div>
+    <div class="modal-h"><h3>🧠 Yang AI Ingat</h3><button class="modal-close" onclick="closeModal('memoryModal')">&times;</button></div>
     <div class="modal-body" id="memoryBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="welcomeModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-h"><h3 id="welcomeTitle">☀️ Selamat Datang!</h3><button class="modal-close" onclick="closeModal('welcomeModal')">&times;</button></div>
+    <div class="modal-body" id="welcomeBody"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-const API = window.location.origin;
-let currentConv = null, userId = 'u1', abortCtrl = null;
+const API=window.location.origin;
+let currentConv=null, userId='u1', abortCtrl=null, streamAborted=false;
 
-async function api(method, path, body) {
-  const opts = { method, headers: {'Content-Type':'application/json'} };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(API+path, opts);
-  if (!res.ok) throw new Error(await res.text());
+async function api(method,path,body){
+  const opts={method,headers:{'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const res=await fetch(API+path,opts);
+  if(!res.ok)throw new Error(await res.text());
   return res;
 }
-
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.style.display = 'block';
-  setTimeout(() => t.style.display = 'none', 2500);
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',2500);}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function formatTime(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleTimeString('id',{hour:'2-digit',minute:'2-digit'});}
+function formatContent(t){
+  t=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  t=t.replace(/```(\w*)\n?([\s\S]*?)```/g,'<pre><code>$2</code></pre>');
+  t=t.replace(/`([^`]+)`/g,'<code>$1</code>');
+  t=t.replace(/### (.+)$/gm,'<b>$1</b>');
+  t=t.replace(/## (.+)$/gm,'<b>$1</b>');
+  t=t.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  t=t.replace(/\*(.+?)\*/g,'<i>$1</i>');
+  t=t.replace(/\n/g,'<br>');
+  return t;
 }
+function toggleTheme(){document.body.classList.toggle('light');localStorage.setItem('theme',document.body.classList.contains('light')?'light':'dark');}
+if(localStorage.getItem('theme')==='light')document.body.classList.add('light');
 
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-function formatTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleTimeString('id', {hour:'2-digit',minute:'2-digit'});
-}
-
-function formatContent(text) {
-  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-  text = text.replace(/^### (.+)$/gm, '<b>$1</b>');
-  text = text.replace(/^## (.+)$/gm, '<b>$1</b>');
-  text = text.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
-  text = text.replace(/\*(.+?)\*/g, '<i>$1</i>');
-  text = text.replace(/\n/g, '<br>');
-  return text;
-}
-
-function toggleTheme() {
-  document.body.classList.toggle('light');
-  localStorage.setItem('theme', document.body.classList.contains('light') ? 'light' : 'dark');
-}
-
-const savedTheme = localStorage.getItem('theme');
-if (savedTheme === 'light') document.body.classList.add('light');
-
-async function loadConversations(filter) {
-  const res = await api('GET', `/api/v1/conversations/${userId}`);
-  let convs = await res.json();
-  if (filter) {
-    const q = filter.toLowerCase();
-    convs = convs.filter(c => (c.title||'').toLowerCase().includes(q));
-  }
-  const list = document.getElementById('convList');
-  list.innerHTML = '';
-  convs.forEach(c => {
-    const div = document.createElement('div');
-    div.className = 'conv-item' + (c.id === currentConv ? ' active' : '');
-    div.innerHTML = `<div class="conv-title">${escHtml(c.title || 'Percakapan')}</div>
+async function loadConversations(filter){
+  const res=await api('GET',`/api/v1/conversations/${userId}`);
+  let convs=await res.json();
+  if(filter){const q=filter.toLowerCase();convs=convs.filter(c=>(c.title||'').toLowerCase().includes(q));}
+  document.getElementById('convList').innerHTML=convs.map(c=>
+    `<div class="conv-item${c.id===currentConv?' active':''}" onclick="selectConversation('${c.id}')">
+      <div class="conv-title">${escHtml(c.title||'Percakapan')}</div>
       <div class="conv-meta">${c.category||'casual'} · ${c.message_count||0} pesan</div>
-      <button class="conv-del" onclick="event.stopPropagation();deleteConv('${c.id}')">&times;</button>`;
-    div.onclick = () => selectConversation(c.id);
-    list.appendChild(div);
-  });
+      <button class="conv-del" onclick="event.stopPropagation();deleteConv('${c.id}')">&times;</button>
+    </div>`
+  ).join('');
 }
+function filterConversations(){loadConversations(document.getElementById('searchConv').value);}
 
-function filterConversations() {
-  loadConversations(document.getElementById('searchConv').value);
-}
-
-async function deleteConv(convId) {
-  if (!confirm('Hapus percakapan ini?')) return;
-  await api('DELETE', `/api/v1/conversations/${convId}`);
-  if (currentConv === convId) newConversation();
-  else loadConversations();
+async function deleteConv(id){
+  if(!confirm('Hapus percakapan ini?'))return;
+  await api('DELETE',`/api/v1/conversations/${id}`);
+  if(currentConv===id)newConversation();else loadConversations();
   toast('Percakapan dihapus');
 }
 
-async function selectConversation(convId) {
-  currentConv = convId;
-  const res = await api('GET', `/api/v1/conversations/${convId}/messages`);
-  const msgs = await res.json();
-  document.getElementById('chatArea').innerHTML = '';
-  document.getElementById('exportBtn').style.display = '';
-  msgs.forEach(m => addMessage(m.role, m.content, m.id, m.created_at));
-  document.getElementById('convTitle').textContent = 'Percakapan';
+async function selectConversation(id){
+  currentConv=id;
+  const res=await api('GET',`/api/v1/conversations/${id}/messages`);
+  const msgs=await res.json();
+  document.getElementById('chatArea').innerHTML='';
+  document.getElementById('exportBtn').style.display='';
+  msgs.forEach(m=>addMessage(m.role,m.content,m.id,m.created_at,m.extra));
+  document.getElementById('convTitle').textContent='Percakapan';
   loadConversations();
 }
 
-function addMessage(role, content, msgId, time) {
-  const area = document.getElementById('chatArea');
-  const es = document.getElementById('emptyState');
-  if (es) es.style.display = 'none';
-  if (role === 'system') {
-    const div = document.createElement('div'); div.className = 'msg system';
-    div.textContent = content; area.appendChild(div); area.scrollTop = area.scrollHeight;
-    return div;
+function addMessage(role,content,msgId,time,extra){
+  const area=document.getElementById('chatArea');
+  const es=document.getElementById('emptyState');
+  if(es)es.style.display='none';
+  if(role==='system'){
+    const div=document.createElement('div');div.className='msg system';
+    div.textContent=content;area.appendChild(div);area.scrollTop=area.scrollHeight;return div;
   }
-  const div = document.createElement('div');
-  div.className = 'msg ' + role;
-  if (role === 'assistant' && msgId) {
-    div.innerHTML = `<div class="msg-actions">
-      <button onclick="deleteMsg('${msgId}',this)">🗑</button>
-    </div>`;
-  }
-  div.innerHTML += `<div class="role-label" style="font-size:11px;color:var(--text2);margin-bottom:2px">${role==='user'?'Kamu':'AI'}</div>
+  const div=document.createElement('div');
+  div.className='msg '+role;
+  const voteHtml=role==='assistant'&&msgId
+    ?`<button class="vote-up" onclick="voteMsg('${msgId}','up',this)" title="Membantu">👍</button><button class="vote-down" onclick="voteMsg('${msgId}','down',this)" title="Kurang">👎</button>`
+    :'';
+  const editHtml=role==='user'&&msgId
+    ?`<button onclick="editMsg('${msgId}','${escHtml(content)}')" title="Edit">✏️</button>`
+    :'';
+  div.innerHTML=`<div class="msg-actions">${editHtml}${voteHtml}</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:2px">${role==='user'?'Kamu':'AI'}</div>
     ${formatContent(content)}
-    ${time ? `<div class="time">${formatTime(time)}</div>` : ''}`;
-  area.appendChild(div); area.scrollTop = area.scrollHeight; return div;
+    ${time?`<div class="time">${formatTime(time)}</div>`:''}`;
+  if(role==='user'&&msgId)div.onclick=()=>editMsg(msgId,content);
+  area.appendChild(div);area.scrollTop=area.scrollHeight;return div;
 }
 
-async function deleteMsg(msgId, btn) {
-  if (!confirm('Hapus pesan ini?')) return;
-  await api('DELETE', `/api/v1/messages/${msgId}`);
-  btn.closest('.msg').remove();
-  toast('Pesan dihapus');
+async function voteMsg(msgId,vote,btn){
+  await api('POST',`/api/v1/messages/${msgId}/vote`,{vote});
+  btn.textContent=vote==='up'?'👍🏽':'👎🏽';
+  toast('Terima kasih feedbacknya!');
 }
 
-let streamAborted = false;
-
-function cancelStream() {
-  streamAborted = true;
-  if (abortCtrl) abortCtrl.abort();
-  document.getElementById('cancelBtn').style.display = 'none';
-  document.getElementById('sendBtn').disabled = false;
+async function editMsg(msgId,oldContent){
+  const newContent=prompt('Edit pesan:',oldContent);
+  if(!newContent||newContent===oldContent)return;
+  await api('DELETE',`/api/v1/messages/${msgId}`);
+  document.getElementById('chatArea').innerHTML='';
+  loadConversations();
+  sendMessage(newContent);
 }
 
-async function sendMessage() {
-  const input = document.getElementById('messageInput');
-  const btn = document.getElementById('sendBtn');
-  const msg = input.value.trim();
-  if (!msg) return;
-  input.value = ''; btn.disabled = true;
-  streamAborted = false;
+async function voteMessage(msgId,vote,btn){
+  await api('POST',`/api/v1/messages/${msgId}/vote`,{vote});
+  btn.textContent=vote==='up'?'👍🏽':'👎🏽';
+  toast('Terima kasih feedbacknya!');
+}
 
-  if (!currentConv) currentConv = 'conv_' + Date.now();
+function cancelStream(){
+  streamAborted=true;
+  if(abortCtrl)abortCtrl.abort();
+  document.getElementById('cancelBtn').style.display='none';
+  document.getElementById('sendBtn').disabled=false;
+}
 
-  addMessage('user', msg);
-  document.getElementById('typing').style.display = 'block';
-
-  abortCtrl = new AbortController();
-  document.getElementById('cancelBtn').style.display = '';
-
-  try {
-    const res = await fetch(API+'/api/v1/chat', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({user_id:userId, conversation_id:currentConv, message:msg}),
-      signal: abortCtrl.signal,
+async function sendMessage(content){
+  const input=document.getElementById('messageInput');
+  const btn=document.getElementById('sendBtn');
+  const msg=content||input.value.trim();
+  if(!msg)return;
+  if(!content)input.value='';
+  btn.disabled=true;
+  streamAborted=false;
+  if(!currentConv)currentConv='conv_'+Date.now();
+  addMessage('user',msg,null,new Date().toISOString());
+  document.getElementById('typing').style.display='block';
+  abortCtrl=new AbortController();
+  document.getElementById('cancelBtn').style.display='';
+  try{
+    const res=await fetch(API+'/api/v1/chat',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:userId,conversation_id:currentConv,message:msg}),
+      signal:abortCtrl.signal,
     });
-    document.getElementById('typing').style.display = 'none';
-    document.getElementById('cancelBtn').style.display = 'none';
-
-    if (streamAborted) { btn.disabled = false; return; }
-
-    const assistantDiv = addMessage('assistant', '');
-    let statusDiv = null;
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let allText = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      allText += decoder.decode(value, { stream: true });
-      const parts = allText.split('__STATUS__:');
-      let clean = '';
-      for (let i=0; i<parts.length; i++) {
-        if (i===0) { clean += parts[i]; continue; }
-        const nl = parts[i].indexOf('\n');
-        const status = nl===-1 ? parts[i] : parts[i].slice(0,nl);
-        if (statusDiv) statusDiv.remove();
-        statusDiv = addMessage('system', status);
-        clean += nl===-1 ? '' : parts[i].slice(nl+1);
+    document.getElementById('typing').style.display='none';
+    document.getElementById('cancelBtn').style.display='none';
+    if(streamAborted){btn.disabled=false;return;}
+    const assistantDiv=addMessage('assistant','');
+    let statusDiv=null;
+    const reader=res.body.getReader(),decoder=new TextDecoder();
+    let allText='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      allText+=decoder.decode(value,{stream:true});
+      const parts=allText.split('__STATUS__:');
+      let clean='',status='';
+      for(let i=0;i<parts.length;i++){
+        if(i===0){clean+=parts[i];continue;}
+        const nl=parts[i].indexOf('\n');
+        status=nl===-1?parts[i]:parts[i].slice(0,nl);
+        clean+=nl===-1?'':parts[i].slice(nl+1);
       }
-      allText = clean;
-      assistantDiv.innerHTML = `<div class="role-label" style="font-size:11px;color:var(--text2);margin-bottom:2px">AI</div>${formatContent(allText)}`;
-      areaScroll();
+      if(status&&statusDiv)statusDiv.remove();
+      if(status)statusDiv=addMessage('system',status);
+      allText=clean;
+      assistantDiv.innerHTML=`<div style="font-size:11px;color:var(--text2);margin-bottom:2px">AI</div>${formatContent(allText)}`;
+      document.getElementById('chatArea').scrollTop=document.getElementById('chatArea').scrollHeight;
     }
-    if (statusDiv) statusDiv.remove();
-    document.getElementById('exportBtn').style.display = '';
+    if(statusDiv)statusDiv.remove();
+    document.getElementById('exportBtn').style.display='';
     loadConversations();
-  } catch(e) {
-    if (e.name !== 'AbortError') {
-      document.getElementById('typing').style.display = 'none';
-      addMessage('system', 'Error: gagal terhubung ke server');
+  }catch(e){
+    if(e.name!=='AbortError'){
+      document.getElementById('typing').style.display='none';
+      addMessage('system','Error: gagal terhubung ke server');
     }
   }
-  btn.disabled = false;
-  document.getElementById('cancelBtn').style.display = 'none';
+  btn.disabled=false;
+  document.getElementById('cancelBtn').style.display='none';
   input.focus();
 }
 
-function areaScroll() {
-  document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
-}
-
-async function newConversation() {
-  currentConv = null;
-  document.getElementById('chatArea').innerHTML = '<div class="empty-state" id="emptyState"><h3>💬 AI Chat</h3><p>Ketik pesan untuk memulai</p></div>';
-  document.getElementById('convTitle').textContent = 'Percakapan Baru';
-  document.getElementById('exportBtn').style.display = 'none';
+async function newConversation(){
+  currentConv=null;
+  document.getElementById('chatArea').innerHTML='<div class="empty-state" id="emptyState"><h3>💬 AI Chat</h3><p>Ketik pesan untuk memulai</p></div>';
+  document.getElementById('convTitle').textContent='Percakapan Baru';
+  document.getElementById('exportBtn').style.display='none';
   loadConversations();
 }
 
-async function exportChat() {
-  if (!currentConv) { toast('Tidak ada percakapan'); return; }
-  const res = await api('GET', `/api/v1/conversations/${currentConv}/export`);
-  const data = await res.json();
-  const blob = new Blob([data.text], {type:'text/plain'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `chat-${currentConv.slice(0,8)}.txt`;
-  a.click();
+async function exportChat(){
+  if(!currentConv){toast('Tidak ada percakapan');return;}
+  const res=await api('GET',`/api/v1/conversations/${currentConv}/export`);
+  const data=await res.json();
+  const blob=new Blob([data.text],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`chat-${currentConv.slice(0,8)}.txt`;a.click();
   toast('Chat di-export');
 }
 
-function closeModal(id) {
-  document.getElementById(id).classList.remove('show');
-}
+function closeModal(id){document.getElementById(id).classList.remove('show');}
 
-async function showMemory() {
-  const res = await api('GET', `/api/v1/memory/${userId}`);
-  const facts = await res.json();
-  const body = document.getElementById('memoryBody');
-  if (facts.length===0) {
-    body.innerHTML = '<p style="color:var(--text3);text-align:center;padding:20px">Belum ada memori tersimpan</p>';
-  } else {
-    body.innerHTML = facts.map(f => `<div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:8px;border-left:3px solid var(--accent)">
-      <div style="color:var(--text2);font-size:11px;margin-bottom:4px">${escHtml(f.type)}</div>
+async function showMemory(){
+  const res=await api('GET',`/api/v1/memory/${userId}`);
+  const facts=await res.json();
+  document.getElementById('memoryBody').innerHTML=facts.length===0
+    ?'<p style="color:var(--text3);text-align:center;padding:20px">Belum ada memori</p>'
+    :facts.map(f=>`<div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:8px;border-left:3px solid var(--accent)">
+      <div style="color:var(--text2);font-size:11px">${escHtml(f.type)}</div>
       <div style="color:var(--text)"><b>${escHtml(f.key)}:</b> ${escHtml(f.value)}</div>
-      <div style="color:var(--text3);font-size:11px;margin-top:4px">confidence: ${f.confidence} · decay: ${f.decay_score.toFixed(2)}</div>
-    </div>`).join('');
-  }
+      <div style="color:var(--text3);font-size:11px;margin-top:4px">decay: ${f.decay_score.toFixed(2)}</div></div>`
+    ).join('');
   document.getElementById('memoryModal').classList.add('show');
 }
 
+async function checkReminders(){
+  try{
+    const res=await api('GET',`/api/v1/reminders/${userId}`);
+    const reminders=await res.json();
+    if(reminders.length===0)return;
+    document.getElementById('welcomeBody').innerHTML=`
+      <p style="margin-bottom:12px;color:var(--text2)">📌 Kamu punya ${reminders.length} pengingat hari ini:</p>
+      ${reminders.map(r=>`<div style="padding:10px;background:var(--surface2);border-radius:8px;margin-bottom:8px;border-left:3px solid #f59e0b">
+        <div style="color:var(--text)">${escHtml(r.message)}</div>
+        <div style="color:var(--text3);font-size:11px;margin-top:4px">${formatTime(r.remind_at)}</div>
+      </div>`).join('')}
+      <button class="btn-icon" style="margin-top:12px;width:100%" onclick="closeModal('welcomeModal');reminders.forEach(r=>api('PUT','/api/v1/reminders/'+r.id+'/shown'))">Tutup</button>`;
+    document.getElementById('welcomeTitle').textContent='☀️ Selamat Datang!';
+    document.getElementById('welcomeModal').classList.add('show');
+  }catch(e){}
+}
+
 loadConversations();
+checkReminders();
 </script>
 </body>
 </html>

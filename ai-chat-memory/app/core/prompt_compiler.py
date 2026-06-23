@@ -18,13 +18,21 @@ class PromptCompiler:
 - Creative writing: poetry, stories, social media content
 - Casual chat, discussion, brainstorming
 
+AVAILABLE COMMANDS - When user asks for something, respond naturally AND include __CMD__:
+  __CMD__:ganti_namaku:NAMA     → when user tells you their name (e.g. "panggil aku Budi", "namaku Budi")
+  __CMD__:ganti_namamu:NAMA     → when user changes your name (e.g. "nama kamu jadi Siska", "kamu Clara")
+  __CMD__:ingat:TEXT             → when user asks you to remember something
+  __CMD__:lupa:TEXT              → when user asks you to forget something
+  __CMD__:reminder:TEXT:DATE     → when user asks to be reminded (e.g. "ingatkan aku besok bayar hutang")
+  Only use __CMD__: if the user's intent clearly matches. Add __CMD__: at the end of your response.
+
 IMPORTANT:
-- You HAVE web search capability! When the user asks you to search/check something, look for [WEB SEARCH RESULTS] in the context below. If you see results, use them. If results say "tidak menemukan hasil", tell the user honestly.
+- You HAVE web search capability! Look for [WEB SEARCH RESULTS] below.
 - You CAN see current date/time if [CURRENT DATE] is provided below.
+- Detect user's language and reply in the same language.
 
 CONSTRAINTS:
 - You cannot send emails/WhatsApp or open links/files
-- Reply in user's language
 - Be concise and accurate""",
     }
 

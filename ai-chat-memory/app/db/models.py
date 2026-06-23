@@ -102,3 +102,14 @@ class SessionSummary(Base):
     original_tokens = Column(Integer, nullable=True)
     compression_ratio = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+
+
+class Reminder(Base):
+    __tablename__ = "reminders"
+
+    id = Column(String(36), primary_key=True, default=gen_id)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    message = Column(Text, nullable=False)
+    remind_at = Column(DateTime, nullable=False)
+    is_shown = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.now)
