@@ -65,6 +65,14 @@ class PostgresDB:
         result = await self.session.execute(select(Conversation).where(Conversation.id == conv_id))
         return result.scalar_one_or_none()
 
+    async def delete_conversation(self, conv_id: str):
+        await self.session.execute(delete(Conversation).where(Conversation.id == conv_id))
+        await self.session.commit()
+
+    async def delete_message(self, msg_id: str):
+        await self.session.execute(delete(Message).where(Message.id == msg_id))
+        await self.session.commit()
+
     async def save_message(self, conv_id: str, role: str, content: str, **kwargs):
         msg = Message(conversation_id=conv_id, role=role, content=content, **kwargs)
         self.session.add(msg)

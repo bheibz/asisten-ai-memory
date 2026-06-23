@@ -1,3 +1,4 @@
+from app.config import settings
 from app.core.token_counter import count_tokens
 
 
@@ -6,11 +7,9 @@ class PromptCompiler:
     SYSTEM_PROMPTS = {
         "coding": "You are a senior developer. Be concise. Use code blocks. Skip explanations unless asked. Reply in user's language.",
         "writing": "You are a skilled writer. Match user's tone and style. Be creative but concise. Reply in user's language.",
-        "research": "You are a research analyst with web search access. Use [WEB SEARCH RESULTS] if available. Cite sources. Be thorough but structured. Use bullet points.",
+        "research": "You are a research analyst with web search access. Use [WEB SEARCH RESULTS] below if available. Cite sources. Be thorough but structured. Use bullet points.",
         "casual": "You are a friendly AI assistant. Be natural and brief. Reply in user's language. Remember context from memory.",
-        "default": """You are a helpful AI assistant with long-term memory.
-
-CAPABILITIES:
+        "default": """CAPABILITIES:
 - Answering questions, translating languages, summarizing text
 - Writing code, debugging, explaining programming concepts
 - Explaining complex topics simply, helping with learning
@@ -19,8 +18,11 @@ CAPABILITIES:
 - Creative writing: poetry, stories, social media content
 - Casual chat, discussion, brainstorming
 
+IMPORTANT:
+- You HAVE web search capability! When the user asks you to search/check something, look for [WEB SEARCH RESULTS] in the context below. If you see results, use them. If results say "tidak menemukan hasil", tell the user honestly.
+- You CAN see current date/time if [CURRENT DATE] is provided below.
+
 CONSTRAINTS:
-- You CAN search the web via [WEB SEARCH RESULTS] when available
 - You cannot send emails/WhatsApp or open links/files
 - Reply in user's language
 - Be concise and accurate""",
@@ -35,11 +37,16 @@ CONSTRAINTS:
         current_message: str,
         max_context_tokens: int = 2000,
         web_results: list = None,
+        ai_name: str = None,
     ) -> list[dict]:
         messages = []
-        system_content = system_context
+        ai_display_name = ai_name or settings.ai_name
+        system_content = f"Your name is {ai_display_name}. Always respond directly without showing your internal reasoning or thinking process. Start your response immediately with the answer.\n" + system_context
 
         if user_profile:
+            user_display_name = user_profile.get("name") or ""
+            if user_display_name:
+                system_content += f"\n\nThe user's name is {user_display_name}. Always address the user as {user_display_name}."
             profile_line = self._compile_profile(user_profile)
             system_content += f"\n\n[USER PROFILE] {profile_line}"
 
@@ -47,11 +54,10 @@ CONSTRAINTS:
             mem_text = "\n".join(f"- {m['content']}" for m in relevant_memories[:3])
             system_content += f"\n\n[RELEVANT MEMORY]\n{mem_text}"
 
-        if web_results:
+        if web_results is not None:
             from app.tools.web_search import web_search as ws
-            web_text = ws.format_for_prompt(web_results)
-            if web_text:
-                system_content += f"\n\n{web_text}"
+            web_text = ws.format_for_prompt(web_results, current_message)
+            system_content += f"\n\n{web_text}"
 
         messages.append({"role": "system", "content": system_content})
 
@@ -66,7 +72,9 @@ CONSTRAINTS:
             messages.append({"role": msg.get("role", "user"), "content": content})
             remaining -= msg_tokens
 
-        messages.append({"role": "user", "content": current_message})
+        user_name = (user_profile or {}).get("name", "")
+        prefix = f"[Nama user: {user_name}] " if user_name else ""
+        messages.append({"role": "user", "content": prefix + current_message})
         return messages
 
     def _compile_profile(self, profile: dict) -> str:

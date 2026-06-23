@@ -12,6 +12,8 @@ from app.tools.web_search import web_search
 
 
 MEMORY_COMMANDS = {
+    "ganti_namamu": r"(?:aku\s+)?(?:ganti|ubah|set|panggil)\s+(?:(?:nama\s+)?kamu|namamu)\s+(?:menjadi|jadi|:)?\s*([a-zA-Z0-9_]+)",
+    "ganti_namaku": r"(?:aku\s+)?(?:ganti|ubah|set|panggil)\s+(?:(?:nama\s+)?(?:aku|saya)|namaku)\s+(?:menjadi|jadi|:)?\s*([a-zA-Z0-9_]+)",
     "ingat": r"(?:ingat|catat|simpan|remember|save|note)\s+(?:bahwa|:|\s)?\s*(.+)",
     "lupa": r"(?:lupa|forget|hapus|delete|remove)\s+(?:bahwa|:|\s)?\s*(.+)",
     "update": r"(?:perbaharui|ubah|update|ganti|edit|change)\s+(?:catatan|memory|memori|note)?\s*(?:tentang|mengenai|:)?\s*(.+)",
@@ -44,22 +46,40 @@ class BrainOrchestrator:
             yield cached
             return
 
-        working_mem, relevant_mem, user_profile, web_results = await asyncio.gather(
+        yield "\n__STATUS__:🧠 Mengingat memori...\n"
+
+        working_mem, relevant_mem, user_profile = await asyncio.gather(
             self.memory.get_working_memory(user_id, conversation_id),
             self.memory.retrieve_relevant(user_id, message, top_k=5),
             self.memory.get_user_profile(user_id),
-            web_search.search(message, max_results=5)
-            if query.needs_tools else asyncio.sleep(0) or [],
         )
 
+        web_results = []
+        if query.needs_tools:
+            yield "\n__STATUS__:🌐 Mencari di web...\n"
+            web_results = await web_search.search(message, max_results=5)
+
+        yield "\n__STATUS__:💭 Menulis respons...\n"
+
+        from datetime import datetime
+        time_context = ""
+        if query.needs_time:
+            now = datetime.now()
+            days = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]
+            months = ["Januari","Februari","Maret","April","Mei","Juni",
+                      "Juli","Agustus","September","Oktober","November","Desember"]
+            time_context = f"\n[CURRENT DATE] Sekarang hari {days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year}, jam {now.hour:02d}:{now.minute:02d} WIB."
+
+        custom_name = user_profile.get("ai_name") if user_profile else None
         compiled_prompt = self.prompt_compiler.compile(
-            system_context=self._get_system_prompt(query.category),
+            system_context=self._get_system_prompt(query.category) + time_context,
             user_profile=user_profile,
             relevant_memories=relevant_mem,
             recent_messages=working_mem,
             current_message=message,
             max_context_tokens=self._get_max_context(query.complexity),
             web_results=web_results,
+            ai_name=custom_name,
         )
 
         model = self.router.select_model(
@@ -68,6 +88,7 @@ class BrainOrchestrator:
             token_budget=10000,
         )
 
+        import re as _re
         full_response = ""
         async for chunk in llm_gateway.stream(
             model=model,
@@ -77,8 +98,9 @@ class BrainOrchestrator:
             full_response += chunk
             yield chunk
 
+        clean_response = _re.sub(r'__STATUS__:[^\n]*\n?', '', full_response).strip()
         asyncio.create_task(
-            self._post_process(user_id, conversation_id, message, full_response, query)
+            self._post_process(user_id, conversation_id, message, clean_response, query)
         )
 
     async def _handle_memory_command(self, user_id: str, message: str) -> str | None:
@@ -101,6 +123,14 @@ class BrainOrchestrator:
                 db = PostgresDB(session)
                 embedder = Embedder()
                 memory = MemoryManager(db, embedder)
+
+                user = await db.get_user(user_id)
+                if not user:
+                    from app.db.models import User as UserModel
+                    from sqlalchemy import insert
+                    await session.execute(insert(UserModel).values(id=user_id, username=user_id))
+                    await session.commit()
+                    user = await db.get_user(user_id)
 
                 if cmd == "ingat":
                     words = content.split()
@@ -144,6 +174,18 @@ class BrainOrchestrator:
                             })
                             return f"✅ Memory diperbaharui: *{f.fact_key}: {val}*"
                     return f"🔍 Tidak nemu memory tentang *{content}*"
+
+                elif cmd == "ganti_namamu":
+                    profile = await db.get_user_profile(user_id)
+                    profile["ai_name"] = content
+                    await db.update_user_profile(user_id, profile)
+                    return f"✅ Oke, panggil aku *{content}* mulai sekarang!"
+
+                elif cmd == "ganti_namaku":
+                    profile = await db.get_user_profile(user_id)
+                    profile["name"] = content
+                    await db.update_user_profile(user_id, profile)
+                    return f"✅ Senang kenal, *{content}*! Aku akan ingat namamu."
 
                 elif cmd == "lupa":
                     facts = await db.get_user_facts(user_id)

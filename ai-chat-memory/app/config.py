@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     nine_router_base_url: str = "http://localhost:20128/v1"
     nine_router_api_key: str = ""
 
+    ai_name: str = "Clara"
+
     max_working_memory_messages: int = 10
     working_memory_ttl: int = 1800
     default_model: str = "oc/north-mini-code-free"

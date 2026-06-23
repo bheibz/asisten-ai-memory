@@ -9,6 +9,7 @@ class ProcessedQuery:
     category: str
     needs_memory: bool
     needs_tools: bool
+    needs_time: bool
     estimated_tokens: int
 
 
@@ -39,12 +40,23 @@ class QueryClassifier:
         "seperti yang", "sudah pernah", "yang lalu",
     ]
 
-    SEARCH_TRIGGERS = [
-        "cari", "search", "google", "cari tahu", "find", "look up",
-        "berita", "news", "info", "informasi", "information",
-        "apa yang terbaru", "what is", "siapa", "who is",
-        "berapa", "kapan", "dimana", "where", "when",
-        "rekomendasi", "recommendation", "review",
+    SEARCH_PATTERNS = [
+        r"^cari\s+",
+        r"^search\s+",
+        r"^google\s+",
+        r"(bisa|tolong|coba)?\s*cek (di|ke)\s+(internet|online|web|google)",
+        r"cari (tahu|info|berita)",
+        r"(berita|news)\s+(terbaru|hari ini|tentang)",
+        r"recommend",
+        r"rekomendasi",
+    ]
+
+    CURRENT_TIME_PATTERNS = [
+        r"(tanggal|date|hari)\s+(berapa|apa|ini|sekarang|skrng|skarang)",
+        r"(jam|waktu|time|pukul)\s+(berapa|sekarang|skrng|skarang)",
+        r"(sekarang|skrng|skarang)\s+(tanggal|jam|hari)",
+        r"(hari|day)\s+(apa|ini|sekarang|skrng)",
+        r"what (time|day|date) (is|are)",
     ]
 
     async def classify(self, message: str) -> ProcessedQuery:
@@ -54,7 +66,8 @@ class QueryClassifier:
         complexity = self._detect_complexity(msg_lower, word_count)
         category = self._detect_category(msg_lower)
         needs_memory = any(t in msg_lower for t in self.MEMORY_TRIGGERS)
-        needs_tools = any(t in msg_lower for t in self.SEARCH_TRIGGERS)
+        needs_tools = any(re.search(p, msg_lower) for p in self.SEARCH_PATTERNS)
+        needs_time = any(re.search(p, msg_lower) for p in self.CURRENT_TIME_PATTERNS)
 
         return ProcessedQuery(
             original=message,
@@ -62,6 +75,7 @@ class QueryClassifier:
             category=category,
             needs_memory=needs_memory,
             needs_tools=needs_tools,
+            needs_time=needs_time,
             estimated_tokens=int(word_count * 1.5),
         )
 

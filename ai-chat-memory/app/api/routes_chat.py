@@ -38,7 +38,7 @@ async def chat(request: ChatRequest):
 
 
 @router.get("/conversations/{user_id}")
-async def list_conversations(user_id: str, limit: int = 20, db: PostgresDB = Depends(get_session)):
+async def list_conversations(user_id: str, limit: int = 50, db: PostgresDB = Depends(get_session)):
     convs = await db.get_conversations(user_id, limit)
     return [
         {
@@ -52,8 +52,14 @@ async def list_conversations(user_id: str, limit: int = 20, db: PostgresDB = Dep
     ]
 
 
+@router.delete("/conversations/{conv_id}")
+async def delete_conversation(conv_id: str, db: PostgresDB = Depends(get_session)):
+    await db.delete_conversation(conv_id)
+    return {"status": "deleted", "conv_id": conv_id}
+
+
 @router.get("/conversations/{conv_id}/messages")
-async def get_messages(conv_id: str, limit: int = 50, db: PostgresDB = Depends(get_session)):
+async def get_messages(conv_id: str, limit: int = 100, db: PostgresDB = Depends(get_session)):
     msgs = await db.get_messages(conv_id, limit)
     return [
         {
@@ -64,6 +70,23 @@ async def get_messages(conv_id: str, limit: int = 50, db: PostgresDB = Depends(g
         }
         for m in reversed(msgs)
     ]
+
+
+@router.delete("/messages/{msg_id}")
+async def delete_message(msg_id: str, db: PostgresDB = Depends(get_session)):
+    await db.delete_message(msg_id)
+    return {"status": "deleted", "msg_id": msg_id}
+
+
+@router.get("/conversations/{conv_id}/export")
+async def export_conversation(conv_id: str, db: PostgresDB = Depends(get_session)):
+    msgs = await db.get_messages(conv_id, 10000)
+    lines = []
+    for m in reversed(msgs):
+        lines.append(f"{m.role.upper()} ({m.created_at.isoformat()}):")
+        lines.append(m.content)
+        lines.append("")
+    return {"text": "\n".join(lines), "count": len(msgs)}
 
 
 @router.websocket("/ws/chat/{user_id}")

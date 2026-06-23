@@ -11,10 +11,18 @@ Fast, token-efficient AI chat app dengan 3-tier memory architecture + **9Router 
 - **⚡ Token-Optimized** — Smart retrieval, model routing, compression, response cache
 - **🔀 Model Routing** — Otomatis pilih model sesuai complexity + category
 - **🌐 Web Search** — Cari info real-time via DuckDuckGo (gratis, tanpa API key)
-- **📝 Memory Command** — Perintah `ingat`, `lupa`, `perbaharui` langsung dari chat
-- **🔍 Semantic Search** — Cari memory relevan pakai cosine similarity
-- **📉 Memory Decay** — Auto-cleanup memory yang jarang diakses
+- **📝 Memory Command** — Perintah `ingat`, `lupa`, `perbaharui`, `ganti namaku/namamu` dari chat
+- **🔍 Semantic Search** — Cari memory relevan pakai cosine similarity + keyword overlap
+- **📉 Memory Decay** — Background task auto-cleanup memory yang jarang diakses
 - **🔌 Auto-Fallback** — SQLite, in-memory cache, fake embeddings (tanpa service tambahan)
+- **🕐 Tanggal & Waktu** — AI tahu tanggal/jam sekarang
+- **🗑️ Hapus Percakapan** — Delete percakapan dari sidebar (×)
+- **🗑️ Hapus Pesan** — Delete pesan langsung (hover → 🗑)
+- **📥 Export Chat** — Download riwayat chat (.txt)
+- **🔍 Cari Percakapan** — Search bar di sidebar
+- **⏹ Stop Streaming** — Tombol batal saat AI mengetik
+- **🌓 Dark/Light Mode** — Toggle tema
+- **🕐 Timestamp** — Waktu otomatis di setiap pesan
 - **🐳 Docker Ready** — Mode penuh pakai docker-compose (opsional)
 
 ---
@@ -116,6 +124,8 @@ Menggunakan **9Router proxy** (`http://localhost:20128/v1`) dengan model:
 | **complex** | `oc/deepseek-v4-flash-free` | Coding, analisis, debugging |
 | **creative** | `oc/big-pickle` | Writing, essay, konten panjang |
 | **coding** | `oc/north-mini-code-free` | Pertanyaan coding (prioritas) |
+
+> **Catatan:** Model yang tersedia tergantung 9Router proxy. Semua model `oc/*` adalah reasoning model — respons akan menampilkan proses berpikir AI. Gunakan model non-reasoning seperti `gpt-4o-mini` jika API key OpenAI tersedia.
 
 ---
 
@@ -286,6 +296,7 @@ tail -f /tmp/aichat.log
 | `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL (auto-fallback SQLite) |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis (auto-fallback in-memory) |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant (auto-fallback in-memory) |
+| `AI_NAME` | `Clara` | Nama AI asisten |
 | `DEFAULT_MODEL` | `oc/north-mini-code-free` | Model default |
 | `EMBEDDING_MODEL` | `text-embedding-ada-002` | Model embedding (butuh OpenAI key) |
 | `OPENAI_API_KEY` | `""` | API key OpenAI |
@@ -294,6 +305,24 @@ tail -f /tmp/aichat.log
 ---
 
 ## 📦 Changelog
+
+### v1.2.0
+
+- **🗑️ Hapus percakapan** — Delete via sidebar + API endpoint
+- **🗑️ Hapus pesan** — Delete per-message via hover menu
+- **📥 Export chat** — Download riwayat sebagai .txt
+- **🔍 Cari percakapan** — Search/filter di sidebar
+- **⏹ Cancel streaming** — AbortController + tombol stop
+- **🌓 Dark/Light mode** — Toggle + localStorage persist
+- **🕐 Timestamp** — Waktu dikirim di setiap pesan
+- **🎨 Markdown improved** — Bold, italic, header rendering
+- **🧠 Memory decay** — Background task otomatis (asyncio)
+- **🔌 Auto-create user** — User auto-created di memory commands
+- **🧠 Memory recall** — Keyword overlap + retrieve_all fallback
+- **🔍 Search patterns** — "cek di internet", "bisa cek" dll trigger web search
+- **🕐 Time query** — Tanggal/jam sekarang dari server
+- **🐛 Regex ganti_nama** — "aku ganti nama kamu x ya" diperbaiki
+- **🐛 Reasoning model** — Streaming via reasoning_content di-gateway
 
 ### v1.1.0
 

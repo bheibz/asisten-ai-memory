@@ -18,10 +18,12 @@ class WebSearch:
         with DDGS() as ddgs:
             return list(ddgs.text(query, max_results=max_results))
 
-    def format_for_prompt(self, results: list[dict]) -> str:
-        if not results:
-            return ""
+    def format_for_prompt(self, results: list[dict], query: str = "") -> str:
         lines = ["[WEB SEARCH RESULTS]"]
+        if not results:
+            lines.append(f"Pencarian untuk \"{query}\" tidak menemukan hasil.")
+            lines.append("Kamu bisa bilang ke user bahwa search tidak menemukan hasil.")
+            return "\n".join(lines)
         for i, r in enumerate(results[:5], 1):
             snippet = r["snippet"][:300]
             lines.append(f"{i}. {r['title']}")

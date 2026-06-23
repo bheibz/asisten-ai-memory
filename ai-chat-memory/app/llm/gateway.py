@@ -23,8 +23,11 @@ class NineRouterProvider:
         )
         async for chunk in response:
             delta = chunk.choices[0].delta if chunk.choices else None
-            if delta and delta.content:
-                yield delta.content
+            if delta is None:
+                continue
+            text = delta.content or getattr(delta, "reasoning_content", None)
+            if text:
+                yield text
 
     async def complete(self, model: str, prompt: str, max_tokens: int = 200, temperature: float = 0.3) -> str:
         response = await self.client.chat.completions.create(
