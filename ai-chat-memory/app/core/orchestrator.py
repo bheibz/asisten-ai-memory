@@ -55,6 +55,16 @@ class BrainOrchestrator:
         self, user_id: str, conversation_id: str, message: str,
     ) -> AsyncGenerator[str, None]:
         """Main entry point: process a user message and stream the response."""
+        try:
+            async for chunk in self._process_impl(user_id, conversation_id, message):
+                yield chunk
+        except Exception as e:
+            logger.exception(f"Fatal error in process_message: {e}")
+            yield f"\n❌ Terjadi kesalahan internal: {e}\n"
+
+    async def _process_impl(
+        self, user_id: str, conversation_id: str, message: str,
+    ) -> AsyncGenerator[str, None]:
 
         # 1. Detect & handle user commands
         cmd_handler = CommandHandler(self.memory.db)
