@@ -7,7 +7,7 @@ from app.core.model_router import ModelRouter
 async def test_select_model_default():
     router = ModelRouter()
     model = await router.select_model(complexity="simple", category="casual")
-    assert model == "google/gemini-2.0-flash-exp:free"
+    assert model == "qwen/qwen3-next-80b-a3b-instruct:free"
 
 
 @pytest.mark.asyncio
@@ -28,4 +28,4 @@ async def test_select_model_creative():
 async def test_select_model_force_smart():
     router = ModelRouter()
     model = await router.select_model(complexity="simple", category="casual", force_smart=True)
-    assert model == "google/gemini-2.0-flash-exp:free"
+    assert model == "qwen/qwen3-next-80b-a3b-instruct:free"
