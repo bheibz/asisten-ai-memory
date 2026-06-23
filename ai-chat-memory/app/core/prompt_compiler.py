@@ -5,33 +5,19 @@ from app.core.token_counter import count_tokens
 class PromptCompiler:
 
     SYSTEM_PROMPTS = {
-        "coding": "You are a senior developer with web search access. You CAN search the web when needed. Use [WEB SEARCH RESULTS] below if available. Be concise. Use code blocks. Reply in user's language.",
-        "writing": "You are a skilled writer with web search access. You CAN search the web for research. Use [WEB SEARCH RESULTS] below if available. Reply in user's language.",
-        "research": "You are a research analyst with web search access. You CAN search the web. Use [WEB SEARCH RESULTS] below if available. Cite sources. Be thorough but structured.",
-        "casual": "You are a friendly AI assistant with web search access. You CAN search the web when asked. Use [WEB SEARCH RESULTS] below. Reply in user's language. Remember context from memory.",
-        "default": """You HAVE web search capability and CAN access the internet. When search results are provided below in [WEB SEARCH RESULTS], use them to answer. When asked to search or check something, use the results.
+        "coding": "Senior developer. Web search available. Use [WEB SEARCH RESULTS] below. Code blocks. Reply in user language.",
+        "writing": "Skilled writer. Web search available. Use [WEB SEARCH RESULTS] below. Reply in user language.",
+        "research": "Research analyst. Web search available. Use [WEB SEARCH RESULTS] below. Cite sources. Be thorough.",
+        "casual": "Friendly assistant. Web search available. Use [WEB SEARCH RESULTS] below. Remember memory. Reply in user language.",
+        "default": """Web search: YES. Memory: YES. Date/time: below. Reply in user language.
 
-FEATURES:
-- Answer questions, translate, summarize, write code, debug, explain concepts
-- Search the web via [WEB SEARCH RESULTS] below
-- Remember user info from [RELEVANT MEMORY] and [USER PROFILE]
-- Know current date/time from [CURRENT DATE]
-- Save/update/delete memories when asked
+When user says their name → __CMD__:ganti_namaku:NAME
+When user changes your name → __CMD__:ganti_namamu:NAME
+When user says remember → __CMD__:ingat:TEXT
+When user says forget → __CMD__:lupa:TEXT
+When user asks reminder → __CMD__:reminder:TEXT:DATE
 
-AVAILABLE COMMANDS:
-  __CMD__:ganti_namaku:NAMA     → user tells you their name
-  __CMD__:ganti_namamu:NAMA     → user changes your name
-  __CMD__:ingat:TEXT             → user asks you to remember
-  __CMD__:lupa:TEXT              → user asks you to forget
-  __CMD__:reminder:TEXT:DATE     → user asks for reminder
-
-RULES:
-- Detect user's language and reply in the same language
-- You can access the internet via search. Say "saya cek dulu" if searching.
-- If [WEB SEARCH RESULTS] is present, USE IT to answer.
-- If search results are empty, tell user search didn't find results.
-- You cannot send emails/WhatsApp or open links/files.
-- Be concise and accurate.""",
+Use [WEB SEARCH RESULTS], [RELEVANT MEMORY], [USER PROFILE], [CURRENT DATE] below when available.""",
     }
 
     def compile(
@@ -57,8 +43,8 @@ RULES:
             system_content += f"\n\n[USER PROFILE] {profile_line}"
 
         if relevant_memories:
-            mem_text = "\n".join(f"- {m['content']}" for m in relevant_memories[:3])
-            system_content += f"\n\n[RELEVANT MEMORY]\n{mem_text}"
+            mem_text = " | ".join(f"• {m['content']}" for m in relevant_memories[:5])
+            system_content += f"\n[RELEVANT MEMORY] {mem_text}"
 
         if web_results is not None:
             from app.tools.web_search import web_search as ws

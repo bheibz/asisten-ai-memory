@@ -19,6 +19,8 @@ class QueryClassifier:
     SIMPLE_PATTERNS = [
         r"^(hi|hello|halo|hey|thanks|ok|oke|terima kasih)",
         r"^(ya|tidak|yes|no|iya|bukan)$",
+        r"^(pagi|siang|sore|malam)",
+        r"^(selamat)\s+(pagi|siang|sore|malam)",
     ]
 
     COMPLEX_PATTERNS = [
@@ -44,9 +46,13 @@ class QueryClassifier:
         r"^cari\s+",
         r"^search\s+",
         r"^google\s+",
-        r"(bisa|tolong|coba)?\s*cek (di|ke)\s+(internet|online|web|google)",
+        r"cariin\s+",
+        r"(bisa|tolong|coba|mau)?\s*cek (di|ke)\s+(internet|online|web|google)",
         r"cari (tahu|info|berita)",
         r"(berita|news)\s+(terbaru|hari ini|tentang)",
+        r"(info|informasi)\s+(tentang|mengenai)",
+        r"tolong\s+cari",
+        r"(aku|saya)\s+mau\s+cari",
         r"recommend",
         r"rekomendasi",
     ]
@@ -66,6 +72,12 @@ class QueryClassifier:
         r"sejarah",
         r"pengertian",
         r"hijriyah",
+        r"jelaskan\s+tentang",
+        r"deskripsikan",
+        r"definisi",
+        r"maksudnya",
+        r"(tolong|bisa)\s+jelaskan",
+        r"informasi\s+tentang",
     ]
 
     CURRENT_TIME_PATTERNS = [
@@ -102,7 +114,7 @@ class QueryClassifier:
         )
 
     def _detect_complexity(self, msg: str, word_count: int) -> str:
-        if word_count < 10 and any(re.match(p, msg) for p in self.SIMPLE_PATTERNS):
+        if word_count < 10 and any(re.search(p, msg) for p in self.SIMPLE_PATTERNS):
             return "simple"
         if any(re.search(p, msg) for p in self.COMPLEX_PATTERNS):
             return "complex"
@@ -115,6 +127,6 @@ class QueryClassifier:
             return "coding"
         if any(w in msg for w in ["tulis", "write", "cerita", "story", "puisi", "poem"]):
             return "writing"
-        if any(w in msg for w in ["cari", "search", "research", "analisis", "analyze"]):
+        if any(w in msg for w in ["cari", "search", "research", "analisis", "analyze", "info"]):
             return "research"
         return "casual"

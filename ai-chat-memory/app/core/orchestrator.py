@@ -132,6 +132,11 @@ class BrainOrchestrator:
             self.memory.get_user_profile(user_id),
         )
 
+        if not relevant_mem:
+            all_facts = await self.memory.long_term.retrieve_all(user_id)
+            if all_facts:
+                relevant_mem = all_facts[:5]
+
         from datetime import datetime
         now = datetime.now()
         days = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]

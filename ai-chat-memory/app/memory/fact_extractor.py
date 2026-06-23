@@ -1,6 +1,8 @@
 import json
 import re
 
+from app.llm.gateway import llm_gateway
+
 
 class FactExtractor:
 
@@ -11,7 +13,45 @@ class FactExtractor:
         facts.extend(self._extract_preference(user_msg))
         facts.extend(self._extract_key_value(user_msg))
 
-        return facts
+        if len(facts) < 3:
+            llm_facts = await self._extract_llm(user_msg)
+            for f in llm_facts:
+                if not any(existing.get("key") == f.get("key") and existing.get("value") == f.get("value") for existing in facts):
+                    facts.append(f)
+
+        return facts[:5]
+
+    async def _extract_llm(self, text: str) -> list[dict]:
+        if len(text.strip()) < 10:
+            return []
+        prompt = (
+            f"Extract facts from this text. Return ONLY a JSON array. "
+            f"Each item: {{\"type\":\"personal|preference|knowledge\",\"key\":\"...\",\"value\":\"...\"}}\n\n"
+            f"Text: {text[:500]}"
+        )
+        try:
+            result = await llm_gateway.complete(model="oc/north-mini-code-free", prompt=prompt, max_tokens=150)
+            return self._parse(result)
+        except Exception:
+            return []
+
+    def _parse(self, text: str) -> list[dict]:
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1].rsplit("\n```", 1)[0]
+        text = text.strip()
+        if text.startswith("["):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass
+        match = re.search(r'\[.*?\]', text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+        return []
 
     def _extract_name(self, text: str) -> list[dict]:
         patterns = [
@@ -49,6 +89,5 @@ class FactExtractor:
         for p in patterns:
             m = re.search(p, text, re.IGNORECASE)
             if m:
-                key = p.split(r"\(")[0].strip("?:")
                 results.append({"type": "personal", "key": "info", "value": m.group(0)})
         return results
