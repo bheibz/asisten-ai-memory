@@ -60,6 +60,12 @@ class BrainOrchestrator:
             self.memory.get_user_profile(user_id),
         )
 
+        from datetime import datetime
+        now = datetime.now()
+        days = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]
+        months = ["Januari","Februari","Maret","April","Mei","Juni",
+                  "Juli","Agustus","September","Oktober","November","Desember"]
+
         force_smart = query.needs_search or query.needs_time
         web_results = []
         search_query = message
@@ -74,19 +80,27 @@ class BrainOrchestrator:
                 force_smart = True
 
         if force_smart:
+            if "hijri" in search_query.lower():
+                search_query = f"tanggal hijriyah hari ini {now.day} {months[now.month-1]} {now.year}"
+            elif not search_query.endswith(str(now.year)):
+                search_query += f" {now.year}"
             yield "\n__STATUS__:🌐 Mencari di web...\n"
             web_results = await web_search.search(search_query, max_results=5)
 
         yield "\n__STATUS__:💭 Menulis respons...\n"
 
-        from datetime import datetime
-        time_context = ""
-        if query.needs_time:
-            now = datetime.now()
-            days = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]
-            months = ["Januari","Februari","Maret","April","Mei","Juni",
-                      "Juli","Agustus","September","Oktober","November","Desember"]
-            time_context = f"\n[CURRENT DATE] Sekarang hari {days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year}, jam {now.hour:02d}:{now.minute:02d} WIB."
+        date_str = f"hari {days[now.weekday()]}, {now.day} {months[now.month-1]} {now.year}"
+        time_str = f"{now.hour:02d}:{now.minute:02d} WIB"
+        time_context = f"\n[CURRENT DATE] Sekarang {date_str}, jam {time_str}."
+        try:
+            from hijri_converter import Gregorian as G
+            h = G(now.year, now.month, now.day).to_hijri()
+            months_ar = ["Muharram","Safar","Rabi'ul Awwal","Rabi'ul Akhir","Jumadil Awwal","Jumadil Akhir",
+                         "Rajab","Sya'ban","Ramadhan","Syawwal","Dzulqa'dah","Dzulhijjah"]
+            hijri_date = f"{h.day} {months_ar[h.month-1]} {h.year} H"
+            time_context += f"\n[HIJRI DATE] {hijri_date}."
+        except Exception:
+            pass
 
         custom_name = user_profile.get("ai_name") if user_profile else None
         system_ctx = self._get_system_prompt(query.category) + time_context

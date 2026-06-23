@@ -16,7 +16,7 @@ Fast, token-efficient AI chat app dengan 3-tier memory architecture + **9Router 
 - **🔍 Semantic Search** — Cari memory relevan pakai cosine similarity + keyword overlap
 - **📉 Memory Decay** — Background task auto-cleanup memory yang jarang diakses
 - **🔌 Auto-Fallback** — SQLite, in-memory cache, fake embeddings (tanpa service tambahan)
-- **🕐 Tanggal & Waktu** — AI tahu tanggal/jam sekarang
+- **🕐 Tanggal & Waktu** — AI tahu tanggal/jam sekarang + konversi Hijriah otomatis
 - **🗑️ Hapus Percakapan** — Delete percakapan dari sidebar (×)
 - **🗑️ Hapus Pesan** — Delete pesan langsung (hover → 🗑)
 - **📥 Export Chat** — Download riwayat chat (.txt)
@@ -313,6 +313,11 @@ tail -f /tmp/aichat.log
 ---
 
 ## 📦 Changelog
+
+### v1.2.2
+
+- **🕌 Hijri date otomatis** — Server-side konversi Gregorian→Hijriah via `hijri-converter`
+- **📅 [HIJRI DATE]** — Inject tanggal Hijriah ke prompt, AI tidak perlu hitung manual
 
 ### v1.2.1
 
