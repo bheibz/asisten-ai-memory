@@ -293,5 +293,5 @@ class BrainOrchestrator:
 
     @staticmethod
     def _get_max_output(complexity: str) -> int:
-        return {"simple": 300, "moderate": 1000, "complex": 4000}.get(
-            complexity, 1000)
+        return {"simple": 600, "moderate": 1500, "complex": 4000}.get(
+            complexity, 1500)

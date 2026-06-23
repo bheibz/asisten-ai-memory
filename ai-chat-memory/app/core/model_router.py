@@ -16,61 +16,79 @@ logger = logging.getLogger(__name__)
 # All models end in :free (OpenRouter free tier).
 
 MODEL_POOLS: dict[str, list[str]] = {
+    # All models verified working on OpenRouter free tier.
+    # Ordered by reliability: most reliable first.
     "simple": [
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
         "google/gemini-2.0-flash-exp:free",
-        "deepseek/deepseek-chat-v3-0324:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
+        "mistralai/mistral-7b-instruct:free",
     ],
     "moderate": [
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "deepseek/deepseek-r1:free",
         "google/gemini-2.0-flash-exp:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
+        "mistralai/mistral-7b-instruct:free",
     ],
     "complex": [
-        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
         "deepseek/deepseek-r1:free",
         "meta-llama/llama-3.3-70b-instruct:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "google/gemini-2.0-flash-exp:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
+        "mistralai/mistral-7b-instruct:free",
     ],
     "creative": [
         "meta-llama/llama-3.3-70b-instruct:free",
-        "deepseek/deepseek-r1:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
         "google/gemini-2.0-flash-exp:free",
+        "deepseek/deepseek-r1:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
+        "mistralai/mistral-7b-instruct:free",
     ],
     "coding": [
         "qwen/qwen3-coder:free",
-        "deepseek/deepseek-chat-v3-0324:free",
-        "cohere/north-mini-code:free",
+        "google/gemini-2.0-flash-exp:free",
+        "deepseek/deepseek-r1:free",
         "qwen/qwen3-next-80b-a3b-instruct:free",
         "meta-llama/llama-3.3-70b-instruct:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
     ],
     "writing": [
         "meta-llama/llama-3.3-70b-instruct:free",
-        "deepseek/deepseek-r1:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
         "google/gemini-2.0-flash-exp:free",
+        "deepseek/deepseek-r1:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
+        "mistralai/mistral-7b-instruct:free",
     ],
     "research": [
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "deepseek/deepseek-r1:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
         "google/gemini-2.0-flash-exp:free",
+        "deepseek/deepseek-r1:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
+        "mistralai/mistral-7b-instruct:free",
     ],
     "casual": [
-        "qwen/qwen3-next-80b-a3b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free",
         "google/gemini-2.0-flash-exp:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "deepseek/deepseek-chat-v3-0324:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "nousresearch/deephermes-3-llama-3-8b:free",
+        "moonshotai/kimi-k2-instruct-0905:free",
+        "mistralai/mistral-7b-instruct:free",
     ],
 }
 
@@ -79,8 +97,9 @@ MODEL_POOLS: dict[str, list[str]] = {
 INITIAL_BACKOFF_SEC = 2.0
 MAX_BACKOFF_SEC = 16.0
 BACKOFF_MULTIPLIER = 2.0
-CIRCUIT_BREAKER_COOLDOWN_SEC = 120  # 2 menit skip model yang kena 429
-CIRCUIT_BREAKER_THRESHOLD = 2  # kena 429 2x berturut-turut → break
+CIRCUIT_BREAKER_COOLDOWN_SEC = 60   # 1 menit skip model yang kena 429
+CIRCUIT_BREAKER_THRESHOLD = 3         # kena 429 3x berturut-turut → break
+NOT_FOUND_COOLDOWN_SEC = 3600         # 1 jam skip model 404 (doesn't exist)
 
 
 class ModelRouter:
@@ -160,6 +179,13 @@ class ModelRouter:
         before retrying, or None if this model should not be retried.
         """
         is_rate_limited = self._is_rate_limit_error(error)
+        is_not_found = self._is_not_found_error(error)
+
+        if is_not_found:
+            # Model doesn't exist — block for a long time
+            self._circuit_breakers[model] = (999, time.time() + NOT_FOUND_COOLDOWN_SEC)
+            logger.warning(f"Model {model} not found, blocking for {NOT_FOUND_COOLDOWN_SEC}s")
+            return 0.0  # skip immediately, no delay
 
         if is_rate_limited:
             count, _ = self._circuit_breakers.get(model, (0, 0))
@@ -206,3 +232,9 @@ class ModelRouter:
             "429", "rate limit", "rate-limited", "too many requests",
             "try again later", "retry",
         ))
+
+    @staticmethod
+    def _is_not_found_error(error: Exception) -> bool:
+        """Detect if a model doesn't exist (404)."""
+        msg = str(error).lower()
+        return "404" in msg or "unavailable" in msg or "not found" in msg
