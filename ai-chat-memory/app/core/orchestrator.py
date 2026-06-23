@@ -13,7 +13,7 @@ from typing import AsyncGenerator, Optional
 
 from app.core.query_classifier import QueryClassifier, ProcessedQuery as QueryResult
 from app.core.prompt_compiler import PromptCompiler
-from app.core.model_router import ModelRouter
+from app.core.model_router import ModelRouter, MODEL_POOLS
 from app.core.command_handler import CommandHandler
 from app.core.context_builder import ContextBuilder
 from app.core.response_cleaner import ResponseCleaner
@@ -108,22 +108,25 @@ class BrainOrchestrator:
             ai_name=custom_name,
         )
 
-        # 8. Select model & stream with fallback
-        model = self.model_override or await self.router.select_model(
-            complexity=query.complexity, category=query.category,
-        )
-        tier = self.router.MODEL_TIERS.get(
-            query.category or query.complexity or "simple",
-            self.router.MODEL_TIERS["simple"],
-        )
-        fallback_model = tier.get("fallback", model)
-        attempts = [model]
-        if fallback_model and fallback_model != model:
-            attempts.append(fallback_model)
+        # 8. Select model & stream with multi-provider pool + backoff
+        import asyncio
+        tier_key = query.category or query.complexity or "simple"
+
+        if self.model_override:
+            # User specified a model — respect it, try once
+            model_pool = [self.model_override]
+        else:
+            model_pool = self._get_model_pool(tier_key)
 
         full_response = ""
         last_error = None
-        for attempt_model in attempts:
+        tried = set()
+
+        for i, attempt_model in enumerate(model_pool):
+            if attempt_model in tried:
+                continue
+            tried.add(attempt_model)
+
             try:
                 async for chunk in llm_gateway.stream(
                     model=attempt_model, messages=compiled_prompt,
@@ -131,13 +134,19 @@ class BrainOrchestrator:
                 ):
                     full_response += chunk
                     yield chunk
+                # Success — reset breaker
+                await self.router.on_success(attempt_model)
                 last_error = None
                 break
             except Exception as stream_err:
                 last_error = stream_err
-                logger.error(f"Streaming error with {attempt_model}: {stream_err}")
-                if attempt_model == fallback_model:
-                    break
+                delay = await self.router.on_error(attempt_model, stream_err)
+                logger.warning(
+                    f"Streaming error with {attempt_model}: {stream_err} "
+                    f"(retry delay: {delay}s)"
+                )
+                if delay and delay > 0:
+                    await asyncio.sleep(delay)
 
         # 9. Handle errors
         if last_error:
@@ -253,6 +262,13 @@ class BrainOrchestrator:
             await memory.extract_and_store_facts(user_id, conversation_id, user_msg, ai_response)
             await memory.compress_if_needed(user_id, conversation_id)
             await redis_client.store_response(user_msg, user_id, ai_response)
+
+    @staticmethod
+    def _get_model_pool(tier_key: str) -> list[str]:
+        """Get the full model pool for a tier, with fallbacks."""
+        pool = MODEL_POOLS.get(tier_key, MODEL_POOLS["simple"])
+        # Make a copy so we don't mutate the global
+        return list(pool)
 
     @staticmethod
     def _get_last_user_msg(working_mem: list) -> str:

@@ -1,57 +1,108 @@
+"""
+Model router with multi-provider free-model pool, exponential backoff,
+and circuit breaker for rate-limited models.
+"""
+
+import time
 import logging
-from typing import AsyncGenerator
+from typing import Optional
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# ── Free model pools (per tier) ─────────────────────────────────────────
+# Priority-ordered: models are tried in order within each tier.
+# All models end in :free (OpenRouter free tier).
+
+MODEL_POOLS: dict[str, list[str]] = {
+    "simple": [
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
+        "deepseek/deepseek-chat-v3-0324:free",
+    ],
+    "moderate": [
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "google/gemini-2.0-flash-exp:free",
+    ],
+    "complex": [
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
+    ],
+    "creative": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
+    ],
+    "coding": [
+        "qwen/qwen3-coder:free",
+        "deepseek/deepseek-chat-v3-0324:free",
+        "cohere/north-mini-code:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+    ],
+    "writing": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
+    ],
+    "research": [
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "deepseek/deepseek-r1:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
+    ],
+    "casual": [
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemini-2.0-flash-exp:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "deepseek/deepseek-chat-v3-0324:free",
+    ],
+}
+
+# ── Backoff config ──────────────────────────────────────────────────────
+
+INITIAL_BACKOFF_SEC = 2.0
+MAX_BACKOFF_SEC = 16.0
+BACKOFF_MULTIPLIER = 2.0
+CIRCUIT_BREAKER_COOLDOWN_SEC = 120  # 2 menit skip model yang kena 429
+CIRCUIT_BREAKER_THRESHOLD = 2  # kena 429 2x berturut-turut → break
+
 
 class ModelRouter:
+    """Smart model selector with multi-provider pool + circuit breaker."""
 
-    MODEL_TIERS = {
-        "simple": {
-            "primary": "qwen/qwen3-next-80b-a3b-instruct:free",
-            "fallback": "meta-llama/llama-3.3-70b-instruct:free",
-        },
-        "moderate": {
-            "primary": "qwen/qwen3-next-80b-a3b-instruct:free",
-            "fallback": "meta-llama/llama-3.3-70b-instruct:free",
-        },
-        "complex": {
-            "primary": "qwen/qwen3-next-80b-a3b-instruct:free",
-            "fallback": "meta-llama/llama-3.3-70b-instruct:free",
-        },
-        "creative": {
-            "primary": "meta-llama/llama-3.3-70b-instruct:free",
-            "fallback": "qwen/qwen3-next-80b-a3b-instruct:free",
-        },
-        "coding": {
-            "primary": "qwen/qwen3-coder:free",
-            "fallback": "cohere/north-mini-code:free",
-        },
-        "writing": {
-            "primary": "meta-llama/llama-3.3-70b-instruct:free",
-            "fallback": "qwen/qwen3-next-80b-a3b-instruct:free",
-        },
-        "research": {
-            "primary": "qwen/qwen3-next-80b-a3b-instruct:free",
-            "fallback": "meta-llama/llama-3.3-70b-instruct:free",
-        },
-        "casual": {
-            "primary": "qwen/qwen3-next-80b-a3b-instruct:free",
-            "fallback": "meta-llama/llama-3.3-70b-instruct:free",
-        },
-    }
+    # Backward-compatible alias
+    MODEL_TIERS = {k: {"primary": v[0], "fallback": v[1] if len(v) > 1 else v[0]}
+                   for k, v in MODEL_POOLS.items()}
 
     def __init__(self, llm_gateway=None):
         self.gateway = llm_gateway
-        self._models_cache = None
+        self._models_cache: list[dict] = []
         self._loaded = False
         self._cache_expires_at = 0.0
-        self._cache_ttl = 300  # 5 minutes
+        self._cache_ttl = 300
+
+        # Circuit breaker state: {model_id: (failure_count, cooldown_until)}
+        self._circuit_breakers: dict[str, tuple[int, float]] = {}
+
+    # ── Public API ──────────────────────────────────────────────────
 
     async def get_models(self) -> list[dict]:
-        import time
         now = time.time()
         if self._models_cache is None or now > self._cache_expires_at:
             self._models_cache = []
@@ -71,19 +122,87 @@ class ModelRouter:
         if not self._loaded:
             await self.get_models()
 
-    async def select_model(self, complexity: str = "", category: str = "", token_budget: int = 10000, force_smart: bool = False) -> str:
-        await self.ensure_loaded()
-        tier = self.MODEL_TIERS.get(force_smart and "complex" or category or complexity or "simple", self.MODEL_TIERS["simple"])
-        primary = tier["primary"]
-        fallback = tier.get("fallback", primary)
+    async def select_model(
+        self, complexity: str = "", category: str = "",
+        token_budget: int = 10000, force_smart: bool = False,
+    ) -> str:
+        """Select the best available model for this request."""
+        tier_key = force_smart and "complex" or category or complexity or "simple"
+        pool = MODEL_POOLS.get(tier_key, MODEL_POOLS["simple"])
+
+        # Check which models are actually available via gateway
         if self._models_cache:
-            available_ids = [m.get("id") for m in self._models_cache]
-            if primary in available_ids:
-                return primary
-            if fallback and fallback in available_ids:
-                return fallback
+            available_ids = {m.get("id") for m in self._models_cache}
+
+            for model in pool:
+                if model not in available_ids:
+                    continue
+                if self._is_circuit_broken(model):
+                    continue
+                return model
+
+            # All pool models are either unavailable or circuit-broken
+            # Fall back to any available model
+            for model in pool:
+                if model in available_ids:
+                    return model
             if available_ids:
-                logger.warning(f"Primary {primary} and fallback {fallback} not found, using first available: {available_ids[0]}")
-                return available_ids[0]
-        logger.warning(f"No models available from gateway, falling back to configured primary: {primary}")
-        return primary
+                fallback = next(iter(available_ids))
+                logger.warning(f"No pool models available, using: {fallback}")
+                return fallback
+
+        # No gateway models loaded — return first pool model
+        return pool[0]
+
+    async def on_error(self, model: str, error: Exception) -> Optional[float]:
+        """
+        Called when a model fails. Returns the recommended delay (seconds)
+        before retrying, or None if this model should not be retried.
+        """
+        is_rate_limited = self._is_rate_limit_error(error)
+
+        if is_rate_limited:
+            count, _ = self._circuit_breakers.get(model, (0, 0))
+            count += 1
+            if count >= CIRCUIT_BREAKER_THRESHOLD:
+                cooldown = time.time() + CIRCUIT_BREAKER_COOLDOWN_SEC
+                self._circuit_breakers[model] = (count, cooldown)
+                logger.warning(
+                    f"Circuit breaker OPEN for {model} "
+                    f"({count} rate limits, cooldown {CIRCUIT_BREAKER_COOLDOWN_SEC}s)"
+                )
+                return INITIAL_BACKOFF_SEC
+            else:
+                self._circuit_breakers[model] = (count, 0)
+                delay = min(INITIAL_BACKOFF_SEC * (BACKOFF_MULTIPLIER ** (count - 1)),
+                            MAX_BACKOFF_SEC)
+                return delay
+        else:
+            # Non-rate-limit errors — no backoff, just try next model
+            return 0.0
+
+    async def on_success(self, model: str):
+        """Reset circuit breaker for a model that succeeded."""
+        self._circuit_breakers.pop(model, None)
+
+    # ── Internal ────────────────────────────────────────────────────
+
+    def _is_circuit_broken(self, model: str) -> bool:
+        """Check if a model is currently in circuit-breaker cooldown."""
+        if model not in self._circuit_breakers:
+            return False
+        _, cooldown_until = self._circuit_breakers[model]
+        if cooldown_until > time.time():
+            return True
+        # Cooldown expired — clear the breaker
+        self._circuit_breakers.pop(model, None)
+        return False
+
+    @staticmethod
+    def _is_rate_limit_error(error: Exception) -> bool:
+        """Detect if an error is a 429 / rate limit."""
+        msg = str(error).lower()
+        return any(kw in msg for kw in (
+            "429", "rate limit", "rate-limited", "too many requests",
+            "try again later", "retry",
+        ))
