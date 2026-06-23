@@ -32,9 +32,11 @@ async def test_create_user(client):
 
 @pytest.mark.asyncio
 async def test_get_user(client):
-    await client.post("/api/v1/users", params={"username": "getuser"})
-    resp = await client.get("/api/v1/users/getuser")
-    assert resp.status_code in (200,)
+    create_resp = await client.post("/api/v1/users", params={"username": "getuser"})
+    assert create_resp.status_code == 200
+    uid = create_resp.json()["id"]
+    resp = await client.get(f"/api/v1/users/{uid}")
+    assert resp.status_code == 200
     data = resp.json()
     assert data["username"] == "getuser"
 

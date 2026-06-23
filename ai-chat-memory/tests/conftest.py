@@ -23,8 +23,6 @@ def event_loop():
 
 @pytest.fixture
 async def client():
-    from httpx import AsyncClient, ASGITransport
-    from app.main import app
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    from httpx import AsyncClient
+    async with AsyncClient(base_url="http://localhost:8000") as ac:
         yield ac
