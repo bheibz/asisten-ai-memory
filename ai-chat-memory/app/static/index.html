@@ -262,12 +262,12 @@ async function sendMessage(content){
     const assistantDiv=addMessage('assistant','');
     let statusDiv=null;
     const reader=res.body.getReader(),decoder=new TextDecoder();
-    let allText='';
+    let allText='',rawAll='';
     while(true){
       const{done,value}=await reader.read();
       if(done)break;
-      allText+=decoder.decode(value,{stream:true});
-      const parts=allText.split('__STATUS__:');
+      rawAll+=decoder.decode(value,{stream:true});
+      const parts=rawAll.split('__STATUS__:');
       let clean='',status='';
       for(let i=0;i<parts.length;i++){
         if(i===0){clean+=parts[i];continue;}
@@ -282,6 +282,58 @@ async function sendMessage(content){
       document.getElementById('chatArea').scrollTop=document.getElementById('chatArea').scrollHeight;
     }
     if(statusDiv)statusDiv.remove();
+
+    // Split reasoning & answer for collapsible display
+    const markers=[
+      "Mulai respon.", "Mulai jawab.", "Jawaban:", "Respon:", "Saya jawab:",
+      "Start response:", "Answer:", "Here is my response:", "Saya akan menjawab:",
+      "Saya akan mulai:", "Ini jawaban saya:", "Sekarang,", "Maka,", "Jadi,",
+      "Oleh karena itu,", "Kesimpulannya,", "Dengan demikian,", "Akhirnya,",
+      "Saya merespon:", "Saya jawab:", "Maka jawaban",
+      "Final response:", "Response:", "My response:",
+      "Langgan:", "Respons:", "Jawab:",
+    ];
+    let reasoning='',answer=allText;
+    for(const m of markers){
+      const idx=allText.lastIndexOf(m);
+      if(idx!==-1){reasoning=allText.slice(0,idx);answer=allText.slice(idx+m.length);break;}
+    }
+    if(!reasoning){
+      const lines=allText.split('\n').filter(l=>l.trim());
+      for(let i=lines.length-1;i>=0;i--){
+        const l=lines[i].trim();
+        if(/^(Halo|Hai|Hi|Hello|Hey|Selamat|Sore|Pagi|Malam|Siang|Alhamdulillah|Alhamdulilah|Tentu|Ya|Oke|Ok|Baik|Baiklah|Hmm)\b/.test(l)){
+          reasoning=lines.slice(0,i).join('\n');answer=lines.slice(i).join('\n');break;
+        }
+      }
+    }
+    if(!reasoning&&allText.length>100){
+      const parts=allText.split(/(?<=\n)\s*(?=[A-Z][a-z]+\s)/);
+      if(parts.length>1){
+        const last=parts[parts.length-1].trim();
+        const prev=parts.slice(0,-1).join('');
+        if(last.length<300){
+          reasoning=prev;answer=last;
+        }
+      }
+    }
+    if(!reasoning&&allText.length>300){
+      const cut=Math.floor(allText.length*0.6);
+      const nearEnd=allText.slice(cut);
+      const sentences=nearEnd.split(/(?<=[.!?])\s+/);
+      if(sentences.length>2){
+        reasoning=allText.slice(0,cut+allText.indexOf(sentences[0]));
+        answer=sentences.slice(1).join(' ')||sentences[0];
+      }
+    }
+    if(reasoning&&reasoning.trim()&&answer.trim()){
+      assistantDiv.innerHTML=`<div style="font-size:11px;color:var(--text2);margin-bottom:2px">AI</div>
+        <details style="margin:4px 0;opacity:.55;font-size:11px">
+          <summary style="cursor:pointer;color:var(--text2);user-select:none">🤔 Proses berpikir</summary>
+          <small style="display:block;margin-top:4px;color:var(--text3);line-height:1.4">${formatContent(reasoning)}</small>
+        </details>
+        ${formatContent(answer)}`;
+    }
     document.getElementById('exportBtn').style.display='';
     loadConversations();
   }catch(e){
