@@ -19,7 +19,6 @@ MEMORY_COMMANDS = {
 }
 
 FOLLOWUP_WORDS = {"terus", "lanjut", "detail", "jelasin", "jelaskan", "lebih", "coba lagi"}
-FAIL_PATTERNS = ["maaf", "tidak bisa", "tidak tahu", "sorry", "can't", "cannot", "tidak memiliki akses"]
 SAD_WORDS = {"sedih", "kecewa", "sakit", "lelah", "sendiri", "betah", "pusing"}
 ANGRY_WORDS = {"marah", "kesal", "sebal", "geram", "jengkel"}
 HAPPY_WORDS = {"senang", "bahagia", "syukur", "ceria", "happy", "seneng"}
@@ -142,19 +141,18 @@ class BrainOrchestrator:
                      "Juli","Agustus","September","Oktober","November","Desember"]
 
         msg_lower = message.lower().strip()
-        force_smart = query.needs_search or query.needs_time
         web_results = []
         search_query = message
+        needs_web = query.needs_search or query.needs_time or query.needs_tools
 
-        # Smart follow-up
         is_followup = any(w in msg_lower for w in FOLLOWUP_WORDS or bool(re.search(r"cek (di|ke)\s+(internet|online|web|google)", msg_lower)))
         if is_followup:
             last_msg = self._get_last_user_msg(working_mem)
             if last_msg:
                 search_query = last_msg
-                force_smart = True
+                needs_web = True
 
-        if force_smart:
+        if needs_web:
             if "hijri" in search_query.lower():
                 search_query = f"tanggal hijriyah hari ini {now.day} {months_id[now.month-1]} {now.year}"
             elif not search_query.endswith(str(now.year)):
@@ -189,8 +187,7 @@ class BrainOrchestrator:
             ai_name=custom_name,
         )
 
-        model = self.router.select_model(complexity=query.complexity, category=query.category,
-                                         token_budget=10000, force_smart=force_smart)
+        model = "oc/deepseek-v4-flash-free"
 
         full_response = ""
         async for chunk in llm_gateway.stream(model=model, messages=compiled_prompt,
@@ -198,30 +195,12 @@ class BrainOrchestrator:
             full_response += chunk
             yield chunk
 
-        # __CMD__: execution + auto-retry
         cmds = re.findall(r'__CMD__:(\w+?):(.+)', full_response)
         cmd_result = None
         for cmd_type, cmd_val in cmds:
             cmd_result = await self._execute_cmd(cmd_type, cmd_val.strip(), user_id)
 
         clean_response = re.sub(r'__STATUS__:[^\n]*\n?|__CMD__:[^\n]*', '', full_response).strip()
-
-        # Auto-retry: if north-mini fails and response is short+negative
-        is_failure = any(p in clean_response.lower() for p in FAIL_PATTERNS)
-        if not force_smart and is_failure and len(clean_response.split()) < 40:
-            yield "\n\n__STATUS__:🔄 Mencoba dengan model lebih besar...\n"
-            smart_prompt = self.prompt_compiler.compile(
-                system_context="Answer accurately and concisely. Use web search results if available." + time_context,
-                user_profile=user_profile, relevant_memories=relevant_mem,
-                recent_messages=working_mem, current_message=message,
-                max_context_tokens=2000, ai_name=custom_name,
-            )
-            retry_response = ""
-            async for chunk in llm_gateway.stream(model="oc/deepseek-v4-flash-free", messages=smart_prompt,
-                                                  max_tokens=1000):
-                retry_response += chunk
-                yield chunk
-            clean_response = retry_response
 
         if cmd_result:
             clean_response += f"\n\n{cmd_result}"

@@ -2,12 +2,12 @@ class ModelRouter:
 
     MODEL_TIERS = {
         "simple": {
-            "primary": "oc/north-mini-code-free",
-            "fallback": "oc/deepseek-v4-flash-free",
+            "primary": "oc/deepseek-v4-flash-free",
+            "fallback": "oc/big-pickle",
         },
         "moderate": {
-            "primary": "oc/mimo-v2.5-free",
-            "fallback": "oc/north-mini-code-free",
+            "primary": "oc/deepseek-v4-flash-free",
+            "fallback": "oc/big-pickle",
         },
         "complex": {
             "primary": "oc/deepseek-v4-flash-free",
@@ -18,18 +18,10 @@ class ModelRouter:
             "fallback": "oc/deepseek-v4-flash-free",
         },
         "coding": {
-            "primary": "oc/north-mini-code-free",
-            "fallback": "oc/deepseek-v4-flash-free",
+            "primary": "oc/deepseek-v4-flash-free",
+            "fallback": "oc/big-pickle",
         },
     }
 
-    def select_model(self, complexity: str, category: str, token_budget: int = 10000, force_smart: bool = False) -> str:
-        if force_smart:
-            return "oc/deepseek-v4-flash-free"
-        if token_budget < 1000:
-            return "oc/north-mini-code-free"
-        if category == "coding":
-            tier = self.MODEL_TIERS["coding"]
-        else:
-            tier = self.MODEL_TIERS.get(complexity, self.MODEL_TIERS["moderate"])
-        return tier["primary"]
+    def select_model(self, complexity: str = "", category: str = "", token_budget: int = 10000, force_smart: bool = False) -> str:
+        return "oc/deepseek-v4-flash-free"

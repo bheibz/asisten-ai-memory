@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     max_working_memory_messages: int = 10
     working_memory_ttl: int = 1800
-    default_model: str = "oc/north-mini-code-free"
+    default_model: str = "oc/deepseek-v4-flash-free"
     embedding_model: str = "text-embedding-ada-002"
 
     class Config:
