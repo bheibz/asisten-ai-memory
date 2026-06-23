@@ -86,8 +86,10 @@ pre code{background:none;padding:0}
   <div class="sidebar-search"><input id="searchConv" placeholder="Cari..." oninput="filterConversations()"></div>
   <div style="padding:4px 10px 0"><button class="btn-icon" onclick="newConversation()" style="width:100%">+ Baru</button></div>
   <div class="conv-list" id="convList"></div>
-  <div style="padding:8px 10px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);text-align:center">
-    👤 <span id="userIdDisplay">u1</span>
+  <div style="padding:6px 10px;border-top:1px solid var(--border);display:flex;gap:6px;font-size:11px;color:var(--text3);align-items:center;justify-content:center">
+    <button class="btn-icon" onclick="showMemory()" title="Memory" style="padding:4px 8px">🧠</button>
+    <button class="btn-icon" onclick="showKnowledge()" title="Knowledge" style="padding:4px 8px">📚</button>
+    <span style="margin-left:auto">👤 <span id="userIdDisplay">u1</span></span>
   </div>
 </div>
 
@@ -120,6 +122,13 @@ pre code{background:none;padding:0}
   <div class="modal" style="max-width:400px">
     <div class="modal-h"><h3 id="welcomeTitle">☀️ Selamat Datang!</h3><button class="modal-close" onclick="closeModal('welcomeModal')">&times;</button></div>
     <div class="modal-body" id="welcomeBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="knowledgeModal">
+  <div class="modal" style="max-width:550px">
+    <div class="modal-h"><h3>📚 Knowledge Base</h3><button class="modal-close" onclick="closeModal('knowledgeModal')">&times;</button></div>
+    <div class="modal-body" id="knowledgeBody"></div>
   </div>
 </div>
 
@@ -342,6 +351,56 @@ async function showMemory(){
       <div style="color:var(--text3);font-size:11px;margin-top:4px">decay: ${f.decay_score.toFixed(2)}</div></div>`
     ).join('');
   document.getElementById('memoryModal').classList.add('show');
+}
+
+async function showKnowledge(){
+  try{
+    const [statsRes, listRes]=await Promise.all([
+      api('GET',`/api/v1/knowledge/${userId}/stats`),
+      api('GET',`/api/v1/knowledge/${userId}?limit=100`)
+    ]);
+    const stats=await statsRes.json();
+    const notes=await listRes.json();
+    let html=`<div style="margin-bottom:12px">
+      <div style="display:flex;gap:16px;margin-bottom:12px">
+        <div style="background:var(--surface2);padding:10px 14px;border-radius:8px;text-align:center;flex:1">
+          <div style="font-size:20px;font-weight:bold;color:var(--accent)">${stats.total}</div>
+          <div style="font-size:11px;color:var(--text3)">Catatan</div>
+        </div>
+        <div style="background:var(--surface2);padding:10px 14px;border-radius:8px;text-align:center;flex:1">
+          <div style="font-size:20px;font-weight:bold;color:var(--accent)">${stats.pinned||0}</div>
+          <div style="font-size:11px;color:var(--text3)">Disematkan</div>
+        </div>
+      </div>`;
+    const tags=stats.tags||{};
+    const tagKeys=Object.keys(tags);
+    if(tagKeys.length>0){
+      html+=`<div style="margin-bottom:12px">`;
+      tagKeys.slice(0,8).forEach(t=>{
+        html+=`<span style="display:inline-block;background:var(--surface2);border-radius:12px;padding:2px 10px;font-size:11px;margin:2px;color:var(--accent)">#${t}</span>`;
+      });
+      html+=`</div>`;
+    }
+    html+=`<div style="font-size:12px;color:var(--text2);margin-bottom:8px;border-bottom:1px solid var(--border);padding-bottom:6px">Daftar Catatan</div>`;
+    if(notes.length===0){
+      html+=`<p style="color:var(--text3);text-align:center;padding:20px">Belum ada catatan</p>`;
+    }else{
+      notes.forEach(n=>{
+        html+=`<div style="padding:8px 10px;background:var(--surface2);border-radius:6px;margin-bottom:6px;border-left:3px solid ${n.is_pinned?'#f59e0b':'var(--accent)'}">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--text);font-size:13px">${escHtml(n.title)}</span>
+            <span style="font-size:10px;color:var(--text3)">${(n.tags||[]).map(t=>'#'+t).join(' ')}</span>
+          </div>
+          <div style="color:var(--text3);font-size:11px;margin-top:4px">${escHtml(n.content.slice(0,120))}</div>
+        </div>`;
+      });
+    }
+    html+=`<div style="text-align:center;margin-top:12px;font-size:11px;color:var(--text3)">
+      <span>simpan catatan: judul\\nisi</span> · <span>cari catatan keyword</span>
+    </div>`;
+    document.getElementById('knowledgeBody').innerHTML=html;
+    document.getElementById('knowledgeModal').classList.add('show');
+  }catch(e){toast('Gagal load knowledge');}
 }
 
 async function checkReminders(){
