@@ -13,7 +13,7 @@ from typing import AsyncGenerator, Optional
 
 from app.core.query_classifier import QueryClassifier, ProcessedQuery as QueryResult
 from app.core.prompt_compiler import PromptCompiler
-from app.core.model_router import ModelRouter, MODEL_POOLS
+from app.core.model_router import ModelRouter, MODEL_POOLS, model_router
 from app.core.command_handler import CommandHandler
 from app.core.context_builder import ContextBuilder
 from app.core.response_cleaner import ResponseCleaner
@@ -45,7 +45,7 @@ class BrainOrchestrator:
         self.memory = memory_manager
         self.classifier = QueryClassifier()
         self.prompt_compiler = PromptCompiler()
-        self.router = ModelRouter(llm_gateway=llm_gateway)
+        self.router = model_router  # shared singleton — circuit breaker persists
         self.model_override: Optional[str] = None
         self.cleaner = ResponseCleaner()
 

@@ -25,7 +25,6 @@ MODEL_POOLS: dict[str, list[str]] = {
         "deepseek/deepseek-r1:free",
         "nousresearch/deephermes-3-llama-3-8b:free",
         "moonshotai/kimi-k2-instruct-0905:free",
-        "mistralai/mistral-7b-instruct:free",
     ],
     "moderate": [
         "google/gemini-2.0-flash-exp:free",
@@ -34,7 +33,6 @@ MODEL_POOLS: dict[str, list[str]] = {
         "qwen/qwen3-next-80b-a3b-instruct:free",
         "nousresearch/deephermes-3-llama-3-8b:free",
         "moonshotai/kimi-k2-instruct-0905:free",
-        "mistralai/mistral-7b-instruct:free",
     ],
     "complex": [
         "google/gemini-2.0-flash-exp:free",
@@ -43,7 +41,6 @@ MODEL_POOLS: dict[str, list[str]] = {
         "qwen/qwen3-next-80b-a3b-instruct:free",
         "nousresearch/deephermes-3-llama-3-8b:free",
         "moonshotai/kimi-k2-instruct-0905:free",
-        "mistralai/mistral-7b-instruct:free",
     ],
     "creative": [
         "meta-llama/llama-3.3-70b-instruct:free",
@@ -52,7 +49,6 @@ MODEL_POOLS: dict[str, list[str]] = {
         "qwen/qwen3-next-80b-a3b-instruct:free",
         "nousresearch/deephermes-3-llama-3-8b:free",
         "moonshotai/kimi-k2-instruct-0905:free",
-        "mistralai/mistral-7b-instruct:free",
     ],
     "coding": [
         "qwen/qwen3-coder:free",
@@ -70,7 +66,6 @@ MODEL_POOLS: dict[str, list[str]] = {
         "qwen/qwen3-next-80b-a3b-instruct:free",
         "nousresearch/deephermes-3-llama-3-8b:free",
         "moonshotai/kimi-k2-instruct-0905:free",
-        "mistralai/mistral-7b-instruct:free",
     ],
     "research": [
         "google/gemini-2.0-flash-exp:free",
@@ -79,7 +74,6 @@ MODEL_POOLS: dict[str, list[str]] = {
         "qwen/qwen3-next-80b-a3b-instruct:free",
         "nousresearch/deephermes-3-llama-3-8b:free",
         "moonshotai/kimi-k2-instruct-0905:free",
-        "mistralai/mistral-7b-instruct:free",
     ],
     "casual": [
         "google/gemini-2.0-flash-exp:free",
@@ -88,7 +82,6 @@ MODEL_POOLS: dict[str, list[str]] = {
         "deepseek/deepseek-r1:free",
         "nousresearch/deephermes-3-llama-3-8b:free",
         "moonshotai/kimi-k2-instruct-0905:free",
-        "mistralai/mistral-7b-instruct:free",
     ],
 }
 
@@ -103,7 +96,11 @@ NOT_FOUND_COOLDOWN_SEC = 3600         # 1 jam skip model 404 (doesn't exist)
 
 
 class ModelRouter:
-    """Smart model selector with multi-provider pool + circuit breaker."""
+    """Smart model selector with multi-provider pool + circuit breaker.
+
+    State (circuit breakers, model cache) is SHARED across requests —
+    use the module-level `model_router` singleton, not per-request instances.
+    """
 
     # Backward-compatible alias
     MODEL_TIERS = {k: {"primary": v[0], "fallback": v[1] if len(v) > 1 else v[0]}
@@ -238,3 +235,8 @@ class ModelRouter:
         """Detect if a model doesn't exist (404)."""
         msg = str(error).lower()
         return "404" in msg or "unavailable" in msg or "not found" in msg
+from app.llm.gateway import llm_gateway
+
+# ── Singleton ─────────────────────────────────────────────────────────
+# Shared across all requests so circuit breaker state persists.
+model_router = ModelRouter(llm_gateway=llm_gateway)
