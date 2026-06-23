@@ -24,9 +24,11 @@ KNOWLEDGE_COMMANDS = {
     "simpan": r"(?:simpan|catat|save|note)\s+(?:catatan|knowledge|pengetahuan)?\s*[:\-]?\s*([\s\S]+)",
     "cari_catatan": r"(?:cari|search)\s+(?:di\s+)?(?:catatan|knowledge|notes|pengetahuan)\s+(.+)",
 }
-SAD_WORDS = {"sedih", "kecewa", "sakit", "lelah", "sendiri", "betah", "pusing"}
-ANGRY_WORDS = {"marah", "kesal", "sebal", "geram", "jengkel"}
-HAPPY_WORDS = {"senang", "bahagia", "syukur", "ceria", "happy", "seneng"}
+SAD_WORDS = {"sedih", "kecewa", "sakit", "lelah", "sendiri", "betah", "pusing", "rindu", "kehilangan", "menangis"}
+ANGRY_WORDS = {"marah", "kesal", "sebal", "geram", "jengkel", "muak", "jijik", "benci"}
+HAPPY_WORDS = {"senang", "bahagia", "syukur", "ceria", "happy", "seneng", "syukur", "bangga", "terharu"}
+ANXIOUS_WORDS = {"cemas", "khawatir", "takut", "gelisah", "deg", "debar", "panic"}
+TIRED_WORDS = {"capek", "lelah", "mengantuk", "letih", "lesu", "tired", "exhausted"}
 
 
 class BrainOrchestrator:
@@ -45,7 +47,9 @@ class BrainOrchestrator:
 
     def _detect_tone(self, message: str) -> str:
         msg = message.lower()
+        if any(w in msg for w in ANXIOUS_WORDS): return "anxious"
         if any(w in msg for w in SAD_WORDS): return "sympathetic"
+        if any(w in msg for w in TIRED_WORDS): return "tired"
         if any(w in msg for w in ANGRY_WORDS): return "calm"
         if any(w in msg for w in HAPPY_WORDS): return "cheerful"
         return "neutral"
@@ -373,12 +377,19 @@ class BrainOrchestrator:
                     parts = content.split("\n", 1)
                     title = parts[0].strip()[:200]
                     body = parts[1].strip() if len(parts) > 1 else ""
-                    tags_prompt = ""
                     if not body:
                         body = title
                         title = title[:60]
-                    kb = await db.create_knowledge(user_id, title, body, source="chat")
-                    return f"✅ Catatan disimpan: *{kb.title}* (id: {kb.id[:8]}...)"
+                    tags = []
+                    try:
+                        tag_prompt = f"Extract 1-3 tags from this text. Return ONLY comma-separated words. Text: {title}"
+                        tag_result = await llm_gateway.complete(model="oc/north-mini-code-free", prompt=tag_prompt, max_tokens=30)
+                        tags = [t.strip().lower() for t in tag_result.split(",") if t.strip() and len(t.strip()) < 20]
+                    except Exception:
+                        pass
+                    kb = await db.create_knowledge(user_id, title, body, tags=tags[:3], source="chat")
+                    tag_str = f" #{' #'.join(kb.tags)}" if kb.tags else ""
+                    return f"✅ Catatan disimpan: *{kb.title}*{tag_str}"
                 elif cmd == "cari_catatan":
                     results = await db.search_knowledge(user_id, content, 3)
                     if not results:
@@ -423,6 +434,8 @@ class BrainOrchestrator:
             "sympathetic": "\n\nTONE: User seems sad or struggling. Respond with extra warmth and empathy.",
             "calm": "\n\nTONE: User seems upset. Stay calm, don't be defensive, be understanding.",
             "cheerful": "\n\nTONE: User is cheerful! Match their positive energy and enthusiasm.",
+            "anxious": "\n\nTONE: User seems anxious or worried. Reassure them, be calm and supportive.",
+            "tired": "\n\nTONE: User seems tired or low energy. Be gentle, don't push too much.",
         }
         return base + tone_map.get(tone, "")
 

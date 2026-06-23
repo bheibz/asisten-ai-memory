@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+import os
+from fastapi import APIRouter, Depends, UploadFile, File
 from pydantic import BaseModel
 
 from app.db.postgres import PostgresDB, get_session
@@ -43,6 +44,15 @@ async def delete_knowledge(kb_id: str, db: PostgresDB = Depends(get_session)):
 async def toggle_pin(kb_id: str, db: PostgresDB = Depends(get_session)):
     await db.toggle_pin_knowledge(kb_id)
     return {"status": "toggled"}
+
+
+@router.post("/knowledge/{user_id}/upload")
+async def upload_file(user_id: str, file: UploadFile = File(...), db: PostgresDB = Depends(get_session)):
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    filename = file.filename or "untitled"
+    title = os.path.splitext(filename)[0][:200]
+    kb = await db.create_knowledge(user_id, title, content, source="upload")
+    return {"id": kb.id, "title": kb.title, "size": len(content)}
 
 
 @router.get("/knowledge/{user_id}/stats")

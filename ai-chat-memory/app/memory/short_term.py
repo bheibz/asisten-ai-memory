@@ -8,7 +8,7 @@ class ShortTermMemory:
 
     async def compress_if_needed(self, user_id: str, conv_id: str, compressor):
         msg_count = await self.db.get_message_count(conv_id)
-        if msg_count > 20:
+        if msg_count > 10:
             old_messages = await self.db.get_messages(conv_id, limit=msg_count - 5, offset=0)
             summary = await compressor.summarize(old_messages, max_tokens=200)
             await self.db.save_session_summary(
