@@ -13,6 +13,7 @@ Fast, token-efficient AI chat app dengan 3-tier memory architecture + **9Router 
 - **🌐 Web Search** — Cari info real-time via DuckDuckGo (gratis, tanpa API key)
 - **🧠 Context-Aware Search** — "cek di internet" otomatis pakai konteks chat sebelumnya
 - **📝 Memory Command** — Perintah `ingat`, `lupa`, `perbaharui`, `ganti namaku/namamu` dari chat
+- **📚 Knowledge Base** — Simpan catatan, cari catatan, auto-tagging, upload file, pinned notes
 - **🔍 Semantic Search** — Cari memory relevan pakai cosine similarity + keyword overlap
 - **📉 Memory Decay** — Background task auto-cleanup memory yang jarang diakses
 - **🔌 Auto-Fallback** — SQLite, in-memory cache, fake embeddings (tanpa service tambahan)
@@ -111,6 +112,26 @@ curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
   -d '{"user_id": "user1", "conversation_id": "conv1", "message": "Halo! Siapa kamu?"}'
 ```
+
+---
+
+---
+
+## 📚 Knowledge Base (Otak Kedua)
+
+Simpan catatan, artikel, atau pengetahuan apa pun yang bisa AI akses kapan saja.
+
+**Perintah Chat:**
+| Perintah | Contoh | Fungsi |
+|----------|--------|--------|
+| `simpan catatan: judul\nisi` | `simpan catatan: cara install python\n1. Download...` | Simpan catatan baru (multi-line) |
+| `cari catatan <keyword>` | `cari catatan python` | Cari catatan yang tersimpan |
+
+**Fitur:**
+- Auto-tagging — AI generate tags otomatis saat simpan catatan
+- Pinned notes — Catatan penting selalu muncul di prompt
+- Upload file — `POST /api/v1/knowledge/{user_id}/upload` (file .txt/.md)
+- Full-text search — Cari berdasarkan judul & isi
 
 ---
 
@@ -313,6 +334,16 @@ tail -f /tmp/aichat.log
 ---
 
 ## 📦 Changelog
+
+### v1.3.0
+
+- **📚 Knowledge Base** — Tabel + CRUD API + chat `simpan catatan` / `cari catatan`
+- **🏷️ Smart tagging** — AI auto-generate tags saat simpan catatan
+- **📎 Upload file** — `POST /knowledge/{user_id}/upload` (txt/md)
+- **📌 Pinned notes** — Catatan penting selalu di-inject ke prompt
+- **🎭 Tone detection** — Tambah anxious & tired tone
+- **📉 Auto-summarize** — Threshold turun 20→10 pesan
+- **🔍 Search patterns** — `info tentang`, `tolong jelaskan`, `pagi`, `siang`, `sore`
 
 ### v1.2.2
 
