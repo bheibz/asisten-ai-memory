@@ -1,441 +1,468 @@
-# 🧠 AI Chat with Long-Term Memory
+# 🧠 Asisten AI Memory
 
-Fast, token-efficient AI chat app dengan 3-tier memory architecture + **9Router proxy** sebagai LLM gateway. Auto-fallback ke SQLite + in-memory storage jika PostgreSQL/Redis/Qdrant tidak tersedia.
+**AI Chat Assistant dengan Long-Term Memory Architecture** — Fast, Token-Efficient & Self-Improving.
+
+> 📌 **Status**: Work-In-Progress (WIP) | Architecture: Planned | Core: In Development
 
 ---
 
-## 📋 Fitur
+## 🎯 Visi
 
-- **💬 Chat Streaming** — REST API + WebSocket real-time via 9Router
-- **🧠 3-Tier Memory** — Working memory, Short-term summaries, Long-term vector search
-- **⚡ Token-Optimized** — Smart retrieval, model routing, compression, response cache
-- **🔀 Smart Model Routing** — North-mini untuk chat biasa, otomatis Deepseek + web search untuk pertanyaan faktual
-- **🌐 Web Search** — Cari info real-time via DuckDuckGo (gratis, tanpa API key)
-- **🧠 Context-Aware Search** — "cek di internet" otomatis pakai konteks chat sebelumnya
-- **📝 Memory Command** — Perintah `ingat`, `lupa`, `perbaharui`, `ganti namaku/namamu` dari chat
-- **📚 Knowledge Base** — Simpan catatan, cari catatan, auto-tagging, upload file, pinned notes
-- **🔍 Semantic Search** — Cari memory relevan pakai cosine similarity + keyword overlap
-- **📉 Memory Decay** — Background task auto-cleanup memory yang jarang diakses
-- **🔌 Auto-Fallback** — SQLite, in-memory cache, fake embeddings (tanpa service tambahan)
-- **🕐 Tanggal & Waktu** — AI tahu tanggal/jam sekarang + konversi Hijriah otomatis
-- **🗑️ Hapus Percakapan** — Delete percakapan dari sidebar (×)
-- **🗑️ Hapus Pesan** — Delete pesan langsung (hover → 🗑)
-- **📥 Export Chat** — Download riwayat chat (.txt)
-- **🔍 Cari Percakapan** — Search bar di sidebar
-- **⏹ Stop Streaming** — Tombol batal saat AI mengetik
-- **🌓 Dark/Light Mode** — Toggle tema
-- **🕐 Timestamp** — Waktu otomatis di setiap pesan
-- **🐳 Docker Ready** — Mode penuh pakai docker-compose (opsional)
+Membangun AI assistant yang:
+- **Mengingat** konteks percakapan jangka panjang (3-tier memory)
+- **Hemat token** melalui smart retrieval & model routing
+- **Responsif** dengan streaming real-time via WebSocket
+- **Scalable** dengan fallback otomatis (SQLite/Redis/Qdrant)
+- **Intelligent** dengan semantic search & fact extraction
+
+---
+
+## ✨ Fitur (Planned)
+
+### 💬 Chat & Memory
+- [x] REST API chat endpoint
+- [x] WebSocket real-time chat
+- [x] 3-Tier memory system (working/short-term/long-term)
+- [x] Auto-create conversations & messages
+- [x] Semantic search memory via embeddings
+- [x] Memory decay & cleanup engine
+- [ ] Custom memory commands (ingat, lupa, perbaharui)
+- [ ] Knowledge base (simpan catatan)
+
+### 🧠 Intelligence
+- [x] Query classifier (rule-based)
+- [x] Smart model routing (simple → cheap, complex → smart)
+- [x] Prompt optimizer (token-efficient compilation)
+- [x] Token counter & tracking
+- [ ] Fact extraction & storage
+- [ ] Conversation compression
+- [ ] Context-aware web search
+
+### 🔌 LLM Gateway
+- [x] 9Router proxy integration (`http://localhost:20128`)
+- [x] Model fallback system
+- [ ] OpenAI integration
+- [ ] Anthropic (Claude) integration
+- [ ] Local LLM support (Ollama)
+
+### 💾 Storage
+- [x] Auto-fallback: PostgreSQL → SQLite
+- [x] Auto-fallback: Redis → In-memory
+- [x] Auto-fallback: Qdrant → Fake embeddings
+- [x] Database migrations
+- [ ] Connection pooling optimization
+
+### 🌐 Additional Features
+- [ ] Web search (DuckDuckGo)
+- [ ] File upload & parsing
+- [ ] Response caching
+- [ ] Rate limiting
+- [ ] User authentication
+- [ ] Admin dashboard
 
 ---
 
 ## 🏗️ Arsitektur
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     CLIENT (REST / WebSocket)                  │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-┌──────────────────────────▼───────────────────────────────────┐
-│                    🧠 BRAIN ORCHESTRATOR                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐   │
-│  │ Query    │  │ Memory   │  │ Prompt   │  │ Model     │   │
-│  │ Classify │  │ Manager  │  │ Compiler │  │ Router    │   │
-│  └──────────┘  └──────────┘  └──────────┘  └───────────┘   │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-         ┌─────────────────┼──────────────────────┐
-         ▼                 ▼                      ▼
-┌──────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│  9Router     │  │  MEMORY STORAGE  │  │  BACKEND TASKS   │
-│  Proxy       │  │  ┌────────────┐  │  │  ┌────────────┐  │
-│  ┌──────────┐│  │  │ SQLite/   │  │  │  │ Fact       │  │
-│  │ OC/Deep- ││  │  │ Postgres  │  │  │  │ Extractor  │  │
-│  │ Seek     ││  │  ├────────────┤  │  │  ├────────────┤  │
-│  │ OC/Mimo  ││  │  │ Memory/   │  │  │  │ Compressor │  │
-│  │ OC/North ││  │  │ Redis     │  │  │  ├────────────┤  │
-│  │ OC/Big   ││  │  ├────────────┤  │  │  │ Decay      │  │
-│  │ Pickle   ││  │  │ Local/    │  │  │  │ Engine     │  │
-│  └──────────┘│  │  │ Qdrant    │  │  │  └────────────┘  │
-└──────────────┘  │  └────────────┘  │  └──────────────────┘
-                  └──────────────────┘
+┌─────────────────────────────────────────────┐
+│         CLIENT (REST / WebSocket)           │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────┐
+│       🧠 BRAIN ORCHESTRATOR                 │
+│  ┌──────────┐ ┌──────────┐ ┌────────────┐  │
+│  │  Query   │ │ Memory   │ │  Prompt    │  │
+│  │Classifier│ │ Manager  │ │ Compiler   │  │
+│  └──────────┘ └──────────┘ └────────────┘  │
+└────────────────┬────────────────────────────┘
+                 │
+    ┌────────────┼────────────┐
+    ▼            ▼            ▼
+┌──────────┐ ┌─────────┐ ┌─────────┐
+│9Router   │ │ MEMORY  │ │TOOLS &  │
+│Gateway   │ │STORAGE  │ │SERVICES │
+└──────────┘ └─────────┘ └─────────┘
 ```
 
-### Storage Auto-Fallback
-
-| Service | Primary | Fallback | Aktif Ketika |
-|---------|---------|----------|-------------|
-| Database | PostgreSQL (port 5432) | SQLite (`data/aichat.db`) | PG tidak reachable |
-| Cache | Redis (port 6379) | In-memory dict | Redis tidak reachable |
-| Vector DB | Qdrant (port 6333) | In-memory + cosine sim | Qdrant tidak reachable |
+### Memory 3-Tier
+| Tier | Storage | Purpose | TTL | Speed |
+|------|---------|---------|-----|-------|
+| **Working** | Redis | Recent messages (last 3-5) | 30 min | ⚡ Ultra |
+| **Short-term** | PostgreSQL | Session summaries | 7-30 hari | 🔄 Medium |
+| **Long-term** | Qdrant | Extracted facts & semantic | Permanent | 💾 Slower |
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Setup
-
+### 1. Clone & Setup
 ```bash
-cd ai-chat-memory
+cd asisten-ai-memory
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-pip install aiosqlite
 ```
 
-Isi `.env` sudah include 9Router config (`http://localhost:20128`).
-
-### 2. Migrate Database
-
+### 2. Database Migration
 ```bash
-source venv/bin/activate
-PYTHONPATH="$PWD" python scripts/migrate_db.py
+export PYTHONPATH="$PWD"
+python scripts/migrate_db.py
 ```
 
-### 3. Jalankan App
-
+### 3. Configure .env
 ```bash
-source venv/bin/activate
-PYTHONPATH="$PWD" python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Copy from template
+cp .env.example .env
+
+# Edit dengan config Anda:
+NINE_ROUTER_BASE_URL=http://localhost:20128/v1
+NINE_ROUTER_API_KEY=your-key-here
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/aichat
+# (optional - fallback ke SQLite jika tidak ada)
 ```
 
-Atau pakai script:
-
+### 4. Run Server
 ```bash
+# Option A: Direct
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Option B: Bash script
 bash start.sh
 ```
 
-### 4. Test
-
+### 5. Test Chat
 ```bash
+# REST API
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
-  -d '{"user_id": "user1", "conversation_id": "conv1", "message": "Halo! Siapa kamu?"}'
+  -d '{
+    "user_id": "user1",
+    "conversation_id": "conv1",
+    "message": "Halo! Siapa kamu?"
+  }'
+
+# WebSocket (gunakan tool seperti wscat)
+wscat -c ws://localhost:8000/ws/chat/user1
 ```
 
 ---
 
----
-
-## 📚 Knowledge Base (Otak Kedua)
-
-Simpan catatan, artikel, atau pengetahuan apa pun yang bisa AI akses kapan saja.
-
-**Perintah Chat:**
-| Perintah | Contoh | Fungsi |
-|----------|--------|--------|
-| `simpan catatan: judul\nisi` | `simpan catatan: cara install python\n1. Download...` | Simpan catatan baru (multi-line) |
-| `cari catatan <keyword>` | `cari catatan python` | Cari catatan yang tersimpan |
-
-**Fitur:**
-- Auto-tagging — AI generate tags otomatis saat simpan catatan
-- Pinned notes — Catatan penting selalu muncul di prompt
-- Upload file — `POST /api/v1/knowledge/{user_id}/upload` (file .txt/.md)
-- Full-text search — Cari berdasarkan judul & isi
-
----
-
-## 🧠 Model Routing
-
-Menggunakan **9Router proxy** (`http://localhost:20128/v1`) dengan model:
-
-| Skenario | Model | Trigger |
-|----------|-------|--------|
-| **Chat biasa** (sapaan, ngobrol santai) | `oc/north-mini-code-free` | Tidak cocok FACTUAL_PATTERNS |
-| **Pertanyaan faktual** (siapa, apa, berapa, tanggal, berita) | `oc/deepseek-v4-flash-free` + web search | FACTUAL_PATTERNS terdeteksi |
-| **Cek internet** (cari, cek, google) | `oc/deepseek-v4-flash-free` + web search | SEARCH_PATTERNS terdeteksi |
-| **Follow-up "cek di internet"** | `oc/deepseek-v4-flash-free` + search dari konteks | Deteksi follow-up, ambil query sebelumnya |
-| **Tanggal/jam sekarang** | `oc/deepseek-v4-flash-free` + time context | CURRENT_TIME_PATTERNS |
-| **Coding** | `oc/north-mini-code-free` | CODING_PATTERNS |
-
-**Cara kerja smart routing:**
-1. Query diklasifikasi (factual, search, time, casual)
-2. Kalau factual → `force_smart=True` → pake Deepseek + web search
-3. Kalau casual → North-mini (cepat, hemat)
-4. "cek internet" setelah tanya sesuatu → ambil konteks dari chat sebelumnya
-
-> **Catatan:** Model `oc/*` adalah reasoning model — respons akan menampilkan proses berpikir AI. Untuk hasil lebih bersih, bisa pakai `gpt-4o-mini` jika API key OpenAI tersedia.
-
----
-
-## 💬 Memory Commands (dalam Chat)
-
-Kamu bisa perintahkan AI langsung dari chat:
-
-| Perintah | Contoh | Fungsi |
-|----------|--------|--------|
-| `ingat <isi>` | `ingat hutang budi 50000` | Simpan memory baru (otomatis update jika key sama) |
-| `lupa <isi>` | `lupa hutang` | Hapus memory |
-| `perbaharui <isi>` | `perbaharui hutang` | Update memory yang sudah ada |
-
-**Cara kerja key:** AI pakai kata pertama sebagai key. Misal `ingat hutang budi 50000` → key=`hutang`, value=`hutang budi 50000`. Jika perintah `ingat` dengan key yang sama diulang, value akan di-update.
-
-Lihat memory via endpoint: `GET /api/v1/memory/{user_id}`
-
----
-
-## 🌐 Web Search
-
-AI bisa search internet real-time pakai DuckDuckGo (gratis, tanpa API key). Otomatis terpicu jika chat mengandung kata kunci seperti: `cari`, `search`, `berita`, `info`, `siapa`, `apa itu`, dll.
-
-**Contoh:**
-```
-Kamu: cari berita AI terbaru
-AI:   [mencari dari DuckDuckGo...] memberikan hasil
-```
-
-Hasil search dimasukkan ke prompt sebagai `[WEB SEARCH RESULTS]` dan AI merespons berdasarkan data tersebut.
-
----
-
-## 🔌 API Endpoints
+## 📚 API Endpoints
 
 ### Chat
-
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `POST` | `/api/v1/chat` | Chat streaming (SSE) |
-| `WS` | `/ws/chat/{user_id}` | Chat real-time WebSocket |
-| `GET` | `/api/v1/conversations/{user_id}` | List percakapan user |
-| `GET` | `/api/v1/conversations/{conv_id}/messages` | Lihat pesan percakapan |
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| `POST` | `/api/v1/chat` | ✅ Implemented |
+| `WS` | `/ws/chat/{user_id}` | ✅ Implemented |
+| `GET` | `/api/v1/conversations/{user_id}` | ✅ Implemented |
+| `GET` | `/api/v1/conversations/{conv_id}/messages` | ✅ Implemented |
+| `DELETE` | `/api/v1/conversations/{conv_id}` | 🔄 In Progress |
 
 ### Memory
-
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/api/v1/memory/{user_id}` | Lihat apa yang AI ingat |
-| `DELETE` | `/api/v1/memory/{user_id}/{fact_id}` | Hapus memory spesifik |
-| `POST` | `/api/v1/memory/{user_id}/teach` | Ajari AI secara manual |
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| `GET` | `/api/v1/memory/{user_id}` | ✅ Implemented |
+| `DELETE` | `/api/v1/memory/{user_id}/{fact_id}` | 🔄 Planned |
+| `POST` | `/api/v1/memory/{user_id}/teach` | 🔄 Planned |
 
 ### User
-
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `POST` | `/api/v1/users` | Buat user baru |
-| `GET` | `/api/v1/users/{user_id}` | Detail user |
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| `POST` | `/api/v1/users` | 🔄 Planned |
+| `GET` | `/api/v1/users/{user_id}` | 🔄 Planned |
 
 ### Health
-
-| Method | Endpoint | Deskripsi |
-|--------|----------|-----------|
-| `GET` | `/` | Root info |
-| `GET` | `/health` | Health check |
+| Method | Endpoint | Status |
+|--------|----------|--------|
+| `GET` | `/` | ✅ Implemented |
+| `GET` | `/health` | ✅ Implemented |
 
 ---
 
 ## 📂 Project Structure
 
 ```
-ai-chat-memory/
+asisten-ai-memory/
 ├── app/
-│   ├── main.py                    # FastAPI entry point + lifespan
-│   ├── config.py                  # Pydantic settings (env vars)
+│   ├── main.py                 # FastAPI entry point + lifespan
+│   ├── config.py               # Pydantic settings (env vars)
 │   ├── api/
-│   │   ├── routes_chat.py         # Chat endpoints (REST + WebSocket)
-│   │   ├── routes_memory.py       # Memory management
-│   │   ├── routes_user.py         # User management
-│   │   └── middleware.py          # Logging + rate limiting
+│   │   ├── routes_chat.py      # Chat endpoints
+│   │   ├── routes_memory.py    # Memory endpoints
+│   │   ├── routes_user.py      # User endpoints
+│   │   └── middleware.py       # Logging, rate limiting
 │   ├── core/
-│   │   ├── orchestrator.py        # 🧠 Brain - main pipeline
-│   │   ├── query_classifier.py    # Rule-based query classification
-│   │   ├── model_router.py        # Route ke model optimal
-│   │   ├── prompt_compiler.py     # Build optimized prompts
-│   │   └── token_counter.py       # Token tracking (tiktoken)
+│   │   ├── orchestrator.py     # 🧠 Main pipeline
+│   │   ├── query_classifier.py # Rule-based classification
+│   │   ├── model_router.py     # Model selection
+│   │   ├── prompt_compiler.py  # Prompt building
+│   │   └── token_counter.py    # Token tracking
 │   ├── memory/
-│   │   ├── memory_manager.py      # Central memory controller
-│   │   ├── working_memory.py      # Buffer pesan terbaru
-│   │   ├── short_term.py          # Session summaries
-│   │   ├── long_term.py           # Semantic memory (vector)
-│   │   ├── compressor.py          # Summarize percakapan
-│   │   ├── fact_extractor.py      # Extract facts from chat
-│   │   └── decay_engine.py        # Memory decay & cleanup
-│   ├── tools/
-│   │   ├── web_search.py          # DuckDuckGo search (gratis)
-│   │   └── __init__.py
+│   │   ├── memory_manager.py   # Central memory controller
+│   │   ├── working_memory.py   # Redis buffer
+│   │   ├── short_term.py       # PostgreSQL summaries
+│   │   ├── long_term.py        # Vector DB (Qdrant)
+│   │   ├── compressor.py       # Conversation compression
+│   │   ├── fact_extractor.py   # Extract facts
+│   │   └── decay_engine.py     # Memory cleanup
 │   ├── llm/
-│   │   ├── gateway.py             # 9Router unified interface
-│   │   ├── embeddings.py          # Embeddings + fake fallback
-│   │   └── providers/             # Provider fallback
+│   │   ├── gateway.py          # 9Router unified interface
+│   │   ├── embeddings.py       # Embeddings + fallback
+│   │   └── providers/          # LLM provider integrations
 │   ├── db/
-│   │   ├── models.py              # SQLAlchemy models
-│   │   ├── database.py            # Auto-detect DB (SQLite/PG)
-│   │   ├── postgres.py            # Database operations
-│   │   ├── redis_client.py        # Redis + in-memory fallback
-│   │   └── vector_store.py        # Qdrant + in-memory fallback
+│   │   ├── models.py           # SQLAlchemy models
+│   │   ├── database.py         # Auto-detect DB
+│   │   ├── postgres.py         # PostgreSQL ops
+│   │   ├── redis_client.py     # Redis + fallback
+│   │   └── vector_store.py     # Qdrant + fallback
+│   ├── tools/
+│   │   ├── web_search.py       # Web search (planned)
+│   │   └── __init__.py
 │   ├── utils/
-│   │   ├── logger.py              # Structured logging
-│   │   ├── hashing.py             # Cache key hashing
-│   │   └── helpers.py             # Utility functions
+│   │   ├── logger.py           # Structured logging
+│   │   ├── hashing.py          # Cache key hashing
+│   │   └── helpers.py          # Utilities
 │   └── workers/
-│       └── memory_worker.py       # Background decay cycle
+│       └── memory_worker.py    # Background decay task
 ├── data/
-│   └── aichat.db                  # SQLite database (auto-created)
+│   └── aichat.db              # SQLite (auto-created)
 ├── scripts/
-│   ├── migrate_db.py              # Create database tables
-│   └── seed_data.py               # Seed demo data
-├── start.sh                       # Quick start script
-├── venv/                          # Python virtual env
-├── docker-compose.yml             # Docker mode (opsional)
+│   ├── migrate_db.py          # Database setup
+│   └── seed_data.py           # Demo data
+├── tests/                     # Unit & integration tests
+├── docker-compose.yml         # Service orchestration
 ├── Dockerfile
 ├── requirements.txt
-├── .env                           # Local config
-└── .env.example                   # Template config
+├── start.sh                   # Quick start script
+├── .env                       # Local config
+├── .env.example               # Config template
+└── README.md
 ```
 
 ---
 
-## 💰 Token Optimization Strategy
+## ⚙️ Configuration
 
-| Strategi | Penghematan | Cara Kerja |
-|----------|-------------|------------|
-| **🧠 3-Tier Memory** | ~70% token | Kirim hanya memory relevan |
-| **🔀 Model Routing** | ~60% cost | Simple → model murah |
-| **📦 Compression** | ~80% storage | Summarize percakapan lama |
-| **⚡ Response Cache** | 100% (cache hit) | Response instant utk pertanyaan identik |
-| **🔍 Semantic Search** | ~90% token | Top-3 relevant vs seluruh history |
-| **📉 Memory Decay** | Storage savings | Auto-archive memory jarang diakses |
-| **🏃 Async Post-process** | Faster UX | Extract facts SETELAH response |
-| **📏 Rule-based Classifier** | 0 extra token | Classify tanpa panggil LLM |
+### Environment Variables (.env)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NINE_ROUTER_BASE_URL` | `http://localhost:20128/v1` | 9Router API URL |
+| `NINE_ROUTER_API_KEY` | `sk-...` | 9Router API key |
+| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL (fallback: SQLite) |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis (fallback: in-memory) |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant (fallback: fake embeddings) |
+| `OPENAI_API_KEY` | (empty) | For embeddings |
+| `ANTHROPIC_API_KEY` | (empty) | For Claude support |
+| `AI_NAME` | `Clara` | Assistant name |
+| `DEFAULT_MODEL` | `oc/north-mini-code-free` | Default LLM |
+| `LOG_LEVEL` | `INFO` | Logging level |
 
 ---
 
 ## 🧪 Development
 
+### Activate Environment
 ```bash
-# Aktifkan venv
 source venv/bin/activate
 export PYTHONPATH="$PWD"
+```
 
-# Jalankan (setelah edit kode)
+### Run with Auto-reload
+```bash
 uvicorn app.main:app --reload
+```
 
-# Seed data demo
+### Seed Demo Data
+```bash
 python scripts/seed_data.py
+```
 
-# Lihat log
+### View Logs
+```bash
 tail -f /tmp/aichat.log
 ```
 
-### Environment Variables (.env)
-
-| Variable | Default | Deskripsi |
-|----------|---------|-----------|
-| `NINE_ROUTER_BASE_URL` | `http://localhost:20128/v1` | 9Router proxy URL |
-| `NINE_ROUTER_API_KEY` | `sk-...` | 9Router API key |
-| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL (auto-fallback SQLite) |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis (auto-fallback in-memory) |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant (auto-fallback in-memory) |
-| `AI_NAME` | `Clara` | Nama AI asisten |
-| `DEFAULT_MODEL` | `oc/north-mini-code-free` | Model default |
-| `EMBEDDING_MODEL` | `text-embedding-ada-002` | Model embedding (butuh OpenAI key) |
-| `OPENAI_API_KEY` | `""` | API key OpenAI |
-| `ANTHROPIC_API_KEY` | `""` | API key Anthropic |
+### Run Tests (future)
+```bash
+pytest tests/
+```
 
 ---
 
-## 📦 Changelog
+## 🐳 Docker Deployment (Optional)
 
-### v1.3.0
+### Full Stack with Services
+```bash
+docker-compose up -d postgres redis qdrant
+# App will auto-detect and use these services
+docker-compose up -d app
+```
 
-- **📚 Knowledge Base** — Tabel + CRUD API + chat `simpan catatan` / `cari catatan`
-- **🏷️ Smart tagging** — AI auto-generate tags saat simpan catatan
-- **📎 Upload file** — `POST /knowledge/{user_id}/upload` (txt/md)
-- **📌 Pinned notes** — Catatan penting selalu di-inject ke prompt
-- **🎭 Tone detection** — Tambah anxious & tired tone
-- **📉 Auto-summarize** — Threshold turun 20→10 pesan
-- **🔍 Search patterns** — `info tentang`, `tolong jelaskan`, `pagi`, `siang`, `sore`
+### Single Container (SQLite mode)
+```bash
+docker build -t asisten-ai .
+docker run -p 8000:8000 -e NINE_ROUTER_API_KEY=your-key asisten-ai
+```
 
-### v1.2.2
+---
 
-- **🕌 Hijri date otomatis** — Server-side konversi Gregorian→Hijriah via `hijri-converter`
-- **📅 [HIJRI DATE]** — Inject tanggal Hijriah ke prompt, AI tidak perlu hitung manual
+## 🧠 How It Works
 
-### v1.2.1
+### Query Processing Pipeline
 
-- **🔀 Smart routing** — North-mini untuk casual chat, Deepseek + web search untuk pertanyaan faktual
-- **🧠 Context-aware search** — "cek di internet" ambil konteks dari pesan user sebelumnya
-- **🔍 FACTUAL_PATTERNS** — Auto-detect pertanyaan faktual (siapa, apa, berapa, hijriyah, dll)
-- **⚡ force_smart** — Parameter untuk routing langsung ke deepseek tanpa north-mini
+```
+User Message
+    │
+    ├─► Classify (simple/moderate/complex)
+    │
+    ├─► Check Cache (Redis)
+    │   └─► Return if hit
+    │
+    ├─► Retrieve Memories (parallel)
+    │   ├─► Working memory (last 3-5 messages from Redis)
+    │   ├─► Relevant memories (semantic search from Qdrant)
+    │   └─► User profile (cached context)
+    │
+    ├─► Compile Prompt (token-optimized)
+    │   └─► Build messages array
+    │
+    ├─► Route to Model
+    │   └─► simple → cheap, complex → smart
+    │
+    ├─► Stream Response
+    │   └─► Send chunks in real-time
+    │
+    └─► Post-Process (async, non-blocking)
+        ├─► Save messages
+        ├─► Update working memory
+        ├─► Extract & store facts
+        ├─► Compress if needed
+        └─► Cache response
+```
 
-### v1.2.0
+### Memory Retrieval
 
-- **🗑️ Hapus percakapan** — Delete via sidebar + API endpoint
-- **🗑️ Hapus pesan** — Delete per-message via hover menu
-- **📥 Export chat** — Download riwayat sebagai .txt
-- **🔍 Cari percakapan** — Search/filter di sidebar
-- **⏹ Cancel streaming** — AbortController + tombol stop
-- **🌓 Dark/Light mode** — Toggle + localStorage persist
-- **🕐 Timestamp** — Waktu dikirim di setiap pesan
-- **🎨 Markdown improved** — Bold, italic, header rendering
-- **🧠 Memory decay** — Background task otomatis (asyncio)
-- **🔌 Auto-create user** — User auto-created di memory commands
-- **🧠 Memory recall** — Keyword overlap + retrieve_all fallback
-- **🔍 Search patterns** — "cek di internet", "bisa cek" dll trigger web search
-- **🕐 Time query** — Tanggal/jam sekarang dari server
-- **🐛 Regex ganti_nama** — "aku ganti nama kamu x ya" diperbaiki
-- **🐛 Reasoning model** — Streaming via reasoning_content di-gateway
+1. **Working Memory**: Ultra-fast lookup of last 3-5 messages from Redis
+2. **Semantic Search**: Query embedding → Qdrant vector search → Top-K relevant facts
+3. **Fallback**: If embeddings fail, use keyword overlap scoring
 
-### v1.1.0
+### Model Selection
 
-- **🧠 Memory recall diperbaiki** — AI selalu cari memory relevan, gak cuma saat ada trigger word
-- **🔍 Keyword overlap scoring** — Fallback saat fake embedding, memory tetap ditemukan via kata kunci
-- **✂️ Fact extractor rewrite** — Pindah dari LLM ke rule-based, cuma ambil dari user_msg (gak ambil dari response AI)
-- **🆔 Payload `id` field** — Semua upsert sekarang include `id`, boost memory berfungsi
-- **🔌 Auto-conversation** — Title otomatis dari pesan pertama, conversation auto-created
-- **🌐 WebSearch async** — Dibungkus `asyncio.to_thread()`, gak blocking event loop
-- **📦 MemoryStore cleanup** — Auto-purge expired keys, limit 10k entries
-- **🪟 Memory modal** — Ganti `window.open` jadi modal dalam halaman (gak kena popup blocker)
-- **📄 favicon.ico** — 404 jadi 200
-- **🐛 Critical fixes** — `Message.id` + `SessionSummary.id` missing `default=gen_id` → crash (✅ fixed)
+| Query | Complexity | Model | Cost |
+|-------|-----------|-------|------|
+| "Hi!" | simple | `oc/north-mini-code-free` | ✅ Cheap |
+| "How do I learn Python?" | moderate | `oc/north-mini-code-free` | ✅ Cheap |
+| "Build a full-stack app architecture" | complex | `oc/deepseek-v4-flash` | 🔄 Medium |
+| Factual question | complex | `oc/deepseek-v4-flash` + web search | 🔄 Medium |
 
 ---
 
 ## 🔧 Troubleshooting
 
-**Q: 9Router proxy tidak connect?**
-```
+### 9Router Connection Error
+```bash
+# Check if 9Router is running
 curl http://localhost:20128/v1/models
-Pastikan 9Router sudah running di port 20128.
+
+# If failed, start 9Router first or configure NINE_ROUTER_BASE_URL
 ```
 
-**Q: ModuleNotFoundError saat run?**
-```
+### ModuleNotFoundError
+```bash
 source venv/bin/activate
 export PYTHONPATH="$PWD"
 ```
 
-**Q: Chat response "[... provider not configured]"?**
-```
-Cek NINE_ROUTER_BASE_URL dan NINE_ROUTER_API_KEY di .env
+### Database Connection Failed
+```bash
+# App auto-fallback ke SQLite
+# Check .env DATABASE_URL or leave empty for SQLite
+
+# To use PostgreSQL:
+docker-compose up -d postgres
+# Update DATABASE_URL in .env
+python scripts/migrate_db.py
 ```
 
-**Q: Embedding error (OpenAI)?**
-```
-Auto-fallback ke fake embeddings (hash-based).
-Tanpa OpenAI key, semantic search via cosine similarity tetap jalan.
-```
-
-**Q: Memory modal tidak muncul?**
-```
-Pastikan tidak ada popup blocker. Modal tampil di dalam halaman,
-bukan window baru — jadi seharusnya tidak diblokir.
+### Embedding Error
+```bash
+# App auto-fallback ke fake embeddings
+# Semantic search will use keyword matching instead
 ```
 
-**Q: Web search tidak jalan?**
-```
-Pastikan duckduckgo_search terinstall:
-pip install duckduckgo_search
-Test: python -c "from duckduckgo_search import DDGS; print(list(DDGS().text('test', max_results=1)))"
-```
-
-**Q: Mau pake PostgreSQL/Redis/Qdrant?**
-```
-docker-compose up -d postgres redis qdrant
-# App akan auto-detect dan pakai service tersebut
+### Memory not found
+```bash
+# Check if Redis is running
+redis-cli ping
+# If failed, app uses in-memory storage
 ```
 
 ---
 
-## 📄 License
+## 📋 Roadmap
 
-MIT
+### Phase 1: Core (Current)
+- [x] FastAPI setup
+- [x] Chat endpoints (REST + WebSocket)
+- [x] 3-Tier memory architecture
+- [x] Query classifier
+- [x] Model router
+- [x] Auto-fallback system
+- [ ] Fact extraction
+
+### Phase 2: Intelligence
+- [ ] Web search integration
+- [ ] Conversation compression
+- [ ] Memory decay optimization
+- [ ] Context-aware responses
+
+### Phase 3: UX & Features
+- [ ] Memory commands (ingat, lupa)
+- [ ] Knowledge base (simpan catatan)
+- [ ] File upload & parsing
+- [ ] Export chat history
+
+### Phase 4: Production
+- [ ] Authentication & authorization
+- [ ] Rate limiting
+- [ ] Admin dashboard
+- [ ] Analytics & monitoring
+- [ ] Deployment guides
+
+---
+
+## 🤝 Contributing
+
+Kontribusi welcome! Untuk mulai:
+
+1. Fork repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+### Development Setup
+```bash
+pip install -r requirements-dev.txt  # includes pytest, black, mypy
+pre-commit install  # auto-format & lint
+```
+
+---
+
+## 📝 License
+
+MIT License — See LICENSE file for details
+
+---
+
+## 🙋 Support & Questions
+
+- **Issues**: Report bugs on GitHub Issues
+- **Discussions**: Ask questions on GitHub Discussions
+- **Email**: (contact info if available)
+
+---
+
+**Made with 🧠 by [bheibz](https://github.com/bheibz)**
